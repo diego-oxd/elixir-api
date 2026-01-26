@@ -65,6 +65,51 @@ def get_items_by_filter(
     return list(db[collection_name].find(filters))
 
 
+def update_item(
+    db: Database, collection_name: str, item_id: str | ObjectId, updates: dict
+) -> bool:
+    """Update a single item by its _id.
+
+    Args:
+        db: The database instance.
+        collection_name: Name of the collection.
+        item_id: The _id of the item to update.
+        updates: Dictionary of field:value pairs to update.
+
+    Returns:
+        True if an item was updated, False otherwise.
+
+    Raises:
+        ValueError: If any key in updates starts with '$' (prevents operator injection).
+    """
+    if any(key.startswith("$") for key in updates):
+        raise ValueError("Update keys cannot start with '$'")
+
+    if isinstance(item_id, str):
+        item_id = ObjectId(item_id)
+
+    result = db[collection_name].update_one({"_id": item_id}, {"$set": updates})
+    return result.modified_count > 0
+
+
+def delete_item(db: Database, collection_name: str, item_id: str | ObjectId) -> bool:
+    """Delete a single item by its _id.
+
+    Args:
+        db: The database instance.
+        collection_name: Name of the collection.
+        item_id: The _id of the item to delete.
+
+    Returns:
+        True if an item was deleted, False otherwise.
+    """
+    if isinstance(item_id, str):
+        item_id = ObjectId(item_id)
+
+    result = db[collection_name].delete_one({"_id": item_id})
+    return result.deleted_count > 0
+
+
 if __name__ == "__main__":
     with get_db("elixir") as db:
         items = get_items(db, "projects")

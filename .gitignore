@@ -32,3 +32,5 @@ htmlcov/
 # uv
 .uv/
 uv.lock
+
+tickets/*
