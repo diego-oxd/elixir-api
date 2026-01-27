@@ -28,6 +28,8 @@ class ProjectCreate(BaseModel):
     model_config = ConfigDict(extra="allow")
 
     name: str
+    description: str | None = None
+    repo_path: str | None = None
 
 
 class ProjectResponse(BaseModel):
@@ -35,11 +37,22 @@ class ProjectResponse(BaseModel):
 
     id: str
     name: str
+    description: str | None = None
+    repo_path: str | None = None
+
+
+class ProjectUpdate(UpdateModel):
+    model_config = ConfigDict(extra="forbid")
+
+    description: str | None = None
+    repo_path: str | None = None
 
 
 class ProjectListItem(BaseModel):
     id: str
     name: str
+    description: str | None = None
+    repo_path: str | None = None
 
 
 # Page models

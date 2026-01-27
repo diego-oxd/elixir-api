@@ -1,14 +1,16 @@
 from typing import Annotated
 
+from bson import ObjectId
 from bson.errors import InvalidId
 from fastapi import APIRouter, Depends, HTTPException
 from pymongo.database import Database
 
-from app.db import add_item, delete_item, get_item_by_id, get_items
+from app.db import add_item, delete_item, get_item_by_id, get_items, update_item
 from app.models.schemas import (
     ProjectCreate,
     ProjectListItem,
     ProjectResponse,
+    ProjectUpdate,
 )
 
 router = APIRouter(prefix="/projects", tags=["projects"])
@@ -31,9 +33,17 @@ def _doc_to_response(doc: dict) -> dict:
 
 @router.get("", response_model=list[ProjectListItem])
 def list_projects(db: Annotated[Database, Depends(get_database)]):
-    """List all projects (id and name only)."""
+    """List all projects."""
     items = get_items(db, COLLECTION)
-    return [{"id": str(item["_id"]), "name": item["name"]} for item in items]
+    return [
+        {
+            "id": str(item["_id"]),
+            "name": item["name"],
+            "description": item.get("description"),
+            "repo_path": item.get("repo_path"),
+        }
+        for item in items
+    ]
 
 
 @router.get("/{project_id}", response_model=ProjectResponse)
@@ -71,3 +81,28 @@ def delete_project(project_id: str, db: Annotated[Database, Depends(get_database
 
     if not deleted:
         raise HTTPException(status_code=404, detail="Project not found")
+
+
+@router.patch("/{project_id}", response_model=ProjectResponse)
+def update_project(
+    project_id: str,
+    updates: ProjectUpdate,
+    db: Annotated[Database, Depends(get_database)],
+):
+    """Update a project."""
+    try:
+        ObjectId(project_id)
+    except InvalidId:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    update_data = updates.model_dump(exclude_unset=True)
+    if not update_data:
+        raise HTTPException(status_code=400, detail="No update data provided")
+
+    update_item(db, COLLECTION, project_id, update_data)
+    item = get_item_by_id(db, COLLECTION, project_id)
+
+    if not item:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    return _doc_to_response(item)
