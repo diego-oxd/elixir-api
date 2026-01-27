@@ -9,7 +9,7 @@ from pymongo.database import Database
 
 def get_client() -> MongoClient:
     """Create a new MongoDB client."""
-    uri = os.getenv("MONGODB_URI", "mongodb://localhost:27017")
+    uri = os.getenv("MONGODB_URI", "mongodb://ferret:ferret@localhost:27017/?authSource=admin")
     return MongoClient(uri)
 
 
@@ -108,6 +108,23 @@ def delete_item(db: Database, collection_name: str, item_id: str | ObjectId) -> 
 
     result = db[collection_name].delete_one({"_id": item_id})
     return result.deleted_count > 0
+
+
+def delete_items_by_filter(
+    db: Database, collection_name: str, filters: dict
+) -> int:
+    """Delete all items matching the given filters.
+
+    Args:
+        db: The database instance.
+        collection_name: Name of the collection.
+        filters: Dictionary of field:value pairs to filter items.
+
+    Returns:
+        Number of items deleted.
+    """
+    result = db[collection_name].delete_many(filters)
+    return result.deleted_count
 
 
 if __name__ == "__main__":

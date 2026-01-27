@@ -5,7 +5,14 @@ from bson.errors import InvalidId
 from fastapi import APIRouter, Depends, HTTPException
 from pymongo.database import Database
 
-from app.db import add_item, delete_item, get_item_by_id, get_items, update_item
+from app.db import (
+    add_item,
+    delete_item,
+    delete_items_by_filter,
+    get_item_by_id,
+    get_items,
+    update_item,
+)
 from app.models.schemas import (
     ProjectCreate,
     ProjectListItem,
@@ -73,13 +80,24 @@ def create_project(
 
 @router.delete("/{project_id}", status_code=204)
 def delete_project(project_id: str, db: Annotated[Database, Depends(get_database)]):
-    """Delete a project."""
+    """Delete a project and all its associated items."""
     try:
-        deleted = delete_item(db, COLLECTION, project_id)
-    except InvalidId:
-        raise HTTPException(status_code=404, detail="Project not found")
+        # Verify project exists first
+        project = get_item_by_id(db, COLLECTION, project_id)
+        if not project:
+            raise HTTPException(status_code=404, detail="Project not found")
 
-    if not deleted:
+        # Delete all related items from each collection
+        delete_items_by_filter(db, "pages", {"project_id": project_id})
+        delete_items_by_filter(db, "code_samples", {"project_id": project_id})
+        delete_items_by_filter(db, "doc_pages", {"project_id": project_id})
+
+        # Finally delete the project itself
+        deleted = delete_item(db, COLLECTION, project_id)
+        if not deleted:
+            raise HTTPException(status_code=404, detail="Project not found")
+
+    except InvalidId:
         raise HTTPException(status_code=404, detail="Project not found")
 
 
