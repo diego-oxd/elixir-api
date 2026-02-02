@@ -55,6 +55,12 @@ class ProjectListItem(BaseModel):
     repo_path: str | None = None
 
 
+class AddCodebaseRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    repo_path: str
+
+
 # Page models
 class PageCreate(BaseModel):
     model_config = ConfigDict(extra="allow")

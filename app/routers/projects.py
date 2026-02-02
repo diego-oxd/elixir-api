@@ -1,8 +1,9 @@
 from typing import Annotated
 
+import requests
 from bson import ObjectId
 from bson.errors import InvalidId
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from pymongo.database import Database
 
 from app.db import (
@@ -14,6 +15,7 @@ from app.db import (
     update_item,
 )
 from app.models.schemas import (
+    AddCodebaseRequest,
     ProjectCreate,
     ProjectListItem,
     ProjectResponse,
@@ -36,6 +38,67 @@ def _doc_to_response(doc: dict) -> dict:
     result = {**doc}
     result["id"] = str(result.pop("_id"))
     return result
+
+
+# Title mapping for generated pages
+PAGE_TITLES = {
+    "api": "API Overview",
+    "data_model": "Data Model",
+    "frontend_components": "Frontend Components",
+    "project_overview": "Project Overview",
+}
+
+
+def generate_documentation_background(project_id: str, repo_path: str, db: Database):
+    """
+    Background task that calls GraphRag service and saves generated pages.
+    """
+    print(f"[INFO] Starting documentation generation for project {project_id}, repo: {repo_path}")
+
+    try:
+        # 1. Call GraphRag service
+        response = requests.post(
+            "http://localhost:8001/scripts/generate_documentation",
+            json={"repo_path": repo_path},
+            timeout=1200  # 20 minutes
+        )
+        response.raise_for_status()
+        data = response.json()
+
+        print(f"[INFO] GraphRag returned successfully for project {project_id}")
+
+        # 2. Delete existing pages for this project (replacement strategy)
+        page_names = list(PAGE_TITLES.keys())
+        deleted_count = delete_items_by_filter(
+            db,
+            "pages",
+            {
+                "project_id": project_id,
+                "name": {"$in": page_names}
+            }
+        )
+        print(f"[INFO] Deleted {deleted_count} existing pages for project {project_id}")
+
+        # 3. Save new pages
+        for name, content in data.items():
+            if name in PAGE_TITLES:
+                page_doc = {
+                    "project_id": project_id,
+                    "name": name,
+                    "title": PAGE_TITLES[name],
+                    "content": content,
+                }
+                add_item(db, "pages", page_doc)
+                print(f"[INFO] Saved page '{name}' for project {project_id}")
+
+        print(f"[INFO] Documentation generation completed for project {project_id}")
+
+    except requests.exceptions.Timeout:
+        print(f"[ERROR] Documentation generation timed out for project {project_id} (20 min limit)")
+    except requests.exceptions.RequestException as e:
+        print(f"[ERROR] GraphRag request failed for project {project_id}: {e}")
+    except Exception as e:
+        print(f"[ERROR] Documentation generation failed for project {project_id}: {e}")
 
 
 @router.get("", response_model=list[ProjectListItem])
@@ -122,5 +185,36 @@ def update_project(
 
     if not item:
         raise HTTPException(status_code=404, detail="Project not found")
+
+    return _doc_to_response(item)
+
+
+@router.post("/{project_id}/add-codebase", response_model=ProjectResponse)
+def add_codebase(
+    project_id: str,
+    request: AddCodebaseRequest,
+    background_tasks: BackgroundTasks,
+    db: Annotated[Database, Depends(get_database)],
+):
+    """Update project repo_path and trigger background documentation generation."""
+    try:
+        ObjectId(project_id)
+    except InvalidId:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    # Update project's repo_path
+    update_item(db, COLLECTION, project_id, {"repo_path": request.repo_path})
+    item = get_item_by_id(db, COLLECTION, project_id)
+
+    if not item:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    # Spawn background task for documentation generation
+    background_tasks.add_task(
+        generate_documentation_background,
+        project_id,
+        request.repo_path,
+        db
+    )
 
     return _doc_to_response(item)

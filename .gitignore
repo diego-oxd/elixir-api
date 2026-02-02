@@ -34,3 +34,5 @@ htmlcov/
 uv.lock
 
 tickets/*
+
+scripts/outputs/*
