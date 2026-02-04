@@ -1,15 +1,14 @@
 from typing import Annotated
 
 import requests
-from bson import ObjectId
-from bson.errors import InvalidId
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
-from pymongo.database import Database
 
 from app.db import (
+    PostgresDatabase,
     add_item,
     delete_item,
     delete_items_by_filter,
+    get_db_dependency,
     get_item_by_id,
     get_items,
     update_item,
@@ -25,12 +24,6 @@ from app.models.schemas import (
 router = APIRouter(prefix="/projects", tags=["projects"])
 
 COLLECTION = "projects"
-
-
-def get_database():
-    from app.main import get_db_dependency
-
-    return get_db_dependency()
 
 
 def _doc_to_response(doc: dict) -> dict:
@@ -49,7 +42,7 @@ PAGE_TITLES = {
 }
 
 
-def generate_documentation_background(project_id: str, repo_path: str, db: Database):
+def generate_documentation_background(project_id: str, repo_path: str, db: PostgresDatabase):
     """
     Background task that calls GraphRag service and saves generated pages.
     """
@@ -102,7 +95,7 @@ def generate_documentation_background(project_id: str, repo_path: str, db: Datab
 
 
 @router.get("", response_model=list[ProjectListItem])
-def list_projects(db: Annotated[Database, Depends(get_database)]):
+def list_projects(db: Annotated[PostgresDatabase, Depends(get_db_dependency)]):
     """List all projects."""
     items = get_items(db, COLLECTION)
     return [
@@ -117,12 +110,9 @@ def list_projects(db: Annotated[Database, Depends(get_database)]):
 
 
 @router.get("/{project_id}", response_model=ProjectResponse)
-def get_project(project_id: str, db: Annotated[Database, Depends(get_database)]):
+def get_project(project_id: str, db: Annotated[PostgresDatabase, Depends(get_db_dependency)]):
     """Get a project by ID."""
-    try:
-        item = get_item_by_id(db, COLLECTION, project_id)
-    except InvalidId:
-        raise HTTPException(status_code=404, detail="Project not found")
+    item = get_item_by_id(db, COLLECTION, project_id)
 
     if not item:
         raise HTTPException(status_code=404, detail="Project not found")
@@ -132,7 +122,7 @@ def get_project(project_id: str, db: Annotated[Database, Depends(get_database)])
 
 @router.post("", response_model=ProjectResponse, status_code=201)
 def create_project(
-    project: ProjectCreate, db: Annotated[Database, Depends(get_database)]
+    project: ProjectCreate, db: Annotated[PostgresDatabase, Depends(get_db_dependency)]
 ):
     """Create a new project."""
     doc = project.model_dump()
@@ -142,25 +132,21 @@ def create_project(
 
 
 @router.delete("/{project_id}", status_code=204)
-def delete_project(project_id: str, db: Annotated[Database, Depends(get_database)]):
+def delete_project(project_id: str, db: Annotated[PostgresDatabase, Depends(get_db_dependency)]):
     """Delete a project and all its associated items."""
-    try:
-        # Verify project exists first
-        project = get_item_by_id(db, COLLECTION, project_id)
-        if not project:
-            raise HTTPException(status_code=404, detail="Project not found")
+    # Verify project exists first
+    project = get_item_by_id(db, COLLECTION, project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
 
-        # Delete all related items from each collection
-        delete_items_by_filter(db, "pages", {"project_id": project_id})
-        delete_items_by_filter(db, "code_samples", {"project_id": project_id})
-        delete_items_by_filter(db, "doc_pages", {"project_id": project_id})
+    # Delete all related items from each collection
+    delete_items_by_filter(db, "pages", {"project_id": project_id})
+    delete_items_by_filter(db, "code_samples", {"project_id": project_id})
+    delete_items_by_filter(db, "doc_pages", {"project_id": project_id})
 
-        # Finally delete the project itself
-        deleted = delete_item(db, COLLECTION, project_id)
-        if not deleted:
-            raise HTTPException(status_code=404, detail="Project not found")
-
-    except InvalidId:
+    # Finally delete the project itself
+    deleted = delete_item(db, COLLECTION, project_id)
+    if not deleted:
         raise HTTPException(status_code=404, detail="Project not found")
 
 
@@ -168,14 +154,9 @@ def delete_project(project_id: str, db: Annotated[Database, Depends(get_database
 def update_project(
     project_id: str,
     updates: ProjectUpdate,
-    db: Annotated[Database, Depends(get_database)],
+    db: Annotated[PostgresDatabase, Depends(get_db_dependency)],
 ):
     """Update a project."""
-    try:
-        ObjectId(project_id)
-    except InvalidId:
-        raise HTTPException(status_code=404, detail="Project not found")
-
     update_data = updates.model_dump(exclude_unset=True)
     if not update_data:
         raise HTTPException(status_code=400, detail="No update data provided")
@@ -194,14 +175,9 @@ def add_codebase(
     project_id: str,
     request: AddCodebaseRequest,
     background_tasks: BackgroundTasks,
-    db: Annotated[Database, Depends(get_database)],
+    db: Annotated[PostgresDatabase, Depends(get_db_dependency)],
 ):
     """Update project repo_path and trigger background documentation generation."""
-    try:
-        ObjectId(project_id)
-    except InvalidId:
-        raise HTTPException(status_code=404, detail="Project not found")
-
     # Update project's repo_path
     update_item(db, COLLECTION, project_id, {"repo_path": request.repo_path})
     item = get_item_by_id(db, COLLECTION, project_id)

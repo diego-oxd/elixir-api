@@ -101,10 +101,10 @@ def load_page_from_json(
 
 if __name__ == "__main__":
 
-    project_id = "69782326f8080cd90c7cf5eb"
-    page_name = "api"
-    page_title = "API Overview"
-    file_path = "./scripts/outputs/api.json"
+    project_id = "a4042b78-d583-41c7-b843-3460c5b5f2a3"
+    page_name = "data_model"
+    page_title = "Data Model"
+    file_path = "./scripts/outputs/data-model.json"
 
     # Example usage - update these values as needed
     result = load_page_from_json(

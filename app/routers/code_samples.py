@@ -1,13 +1,12 @@
 from typing import Annotated
 
-from bson import ObjectId
-from bson.errors import InvalidId
 from fastapi import APIRouter, Depends, HTTPException
-from pymongo.database import Database
 
 from app.db import (
+    PostgresDatabase,
     add_item,
     delete_item,
+    get_db_dependency,
     get_item_by_id,
     get_items_by_filter,
     update_item,
@@ -24,12 +23,6 @@ router = APIRouter(tags=["code-samples"])
 COLLECTION = "code_samples"
 
 
-def get_database():
-    from app.main import get_db_dependency
-
-    return get_db_dependency()
-
-
 def _doc_to_response(doc: dict) -> dict:
     """Convert MongoDB document to response format."""
     result = {**doc}
@@ -42,7 +35,7 @@ def _doc_to_response(doc: dict) -> dict:
     response_model=list[CodeSampleListItem],
 )
 def list_code_samples_by_project(
-    project_id: str, db: Annotated[Database, Depends(get_database)]
+    project_id: str, db: Annotated[PostgresDatabase, Depends(get_db_dependency)]
 ):
     """List all code samples for a project (id and title only)."""
     items = get_items_by_filter(db, COLLECTION, {"project_id": project_id})
@@ -50,12 +43,9 @@ def list_code_samples_by_project(
 
 
 @router.get("/code-samples/{sample_id}", response_model=CodeSampleResponse)
-def get_code_sample(sample_id: str, db: Annotated[Database, Depends(get_database)]):
+def get_code_sample(sample_id: str, db: Annotated[PostgresDatabase, Depends(get_db_dependency)]):
     """Get a code sample by ID."""
-    try:
-        item = get_item_by_id(db, COLLECTION, sample_id)
-    except InvalidId:
-        raise HTTPException(status_code=404, detail="Code sample not found")
+    item = get_item_by_id(db, COLLECTION, sample_id)
 
     if not item:
         raise HTTPException(status_code=404, detail="Code sample not found")
@@ -65,7 +55,7 @@ def get_code_sample(sample_id: str, db: Annotated[Database, Depends(get_database
 
 @router.post("/code-samples", response_model=CodeSampleResponse, status_code=201)
 def create_code_sample(
-    sample: CodeSampleCreate, db: Annotated[Database, Depends(get_database)]
+    sample: CodeSampleCreate, db: Annotated[PostgresDatabase, Depends(get_db_dependency)]
 ):
     """Create a new code sample."""
     doc = sample.model_dump()
@@ -78,14 +68,9 @@ def create_code_sample(
 def update_code_sample(
     sample_id: str,
     updates: CodeSampleUpdate,
-    db: Annotated[Database, Depends(get_database)],
+    db: Annotated[PostgresDatabase, Depends(get_db_dependency)],
 ):
     """Update a code sample."""
-    try:
-        ObjectId(sample_id)
-    except InvalidId:
-        raise HTTPException(status_code=404, detail="Code sample not found")
-
     update_data = updates.model_dump(exclude_unset=True)
     if not update_data:
         raise HTTPException(status_code=400, detail="No update data provided")
@@ -100,12 +85,9 @@ def update_code_sample(
 
 
 @router.delete("/code-samples/{sample_id}", status_code=204)
-def delete_code_sample(sample_id: str, db: Annotated[Database, Depends(get_database)]):
+def delete_code_sample(sample_id: str, db: Annotated[PostgresDatabase, Depends(get_db_dependency)]):
     """Delete a code sample."""
-    try:
-        deleted = delete_item(db, COLLECTION, sample_id)
-    except InvalidId:
-        raise HTTPException(status_code=404, detail="Code sample not found")
+    deleted = delete_item(db, COLLECTION, sample_id)
 
     if not deleted:
         raise HTTPException(status_code=404, detail="Code sample not found")

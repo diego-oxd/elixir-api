@@ -1,13 +1,14 @@
 [project]
 name = "knowledge-extraction-api"
 version = "0.1.0"
-description = "Knowledge extraction API with FerretDB and FastAPI"
+description = "Knowledge extraction API with PostgreSQL and FastAPI"
 requires-python = ">=3.12"
 dependencies = [
-    "pymongo>=4.6.0",
+    "psycopg2-binary>=2.9.9",
     "fastapi>=0.115.0",
     "pydantic>=2.0.0",
     "uvicorn[standard]>=0.30.0",
+    "requests>=2.32.5",
 ]
 
 [project.optional-dependencies]
