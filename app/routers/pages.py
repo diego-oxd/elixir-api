@@ -1,3 +1,4 @@
+import json
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -12,6 +13,7 @@ from app.db import (
     update_item,
 )
 from app.models.schemas import PageCreate, PageResponse, PageUpdate
+import json
 
 router = APIRouter(tags=["pages"])
 
@@ -22,6 +24,10 @@ def _doc_to_response(doc: dict) -> dict:
     """Convert MongoDB document to response format."""
     result = {**doc}
     result["id"] = str(result.pop("_id"))
+
+    if "content" in result:
+        result['content'] = json.dumps(result['content'], ensure_ascii=False, indent=2)
+    
     return result
 
 
