@@ -36,3 +36,5 @@ uv.lock
 tickets/*
 
 scripts/outputs/*
+
+/logs/

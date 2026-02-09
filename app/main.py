@@ -4,7 +4,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.db import close_pool, get_pool
-from app.routers import code_samples, doc_pages, pages, projects
+from app.routers import code_query, code_samples, doc_pages, pages, projects
 
 
 @asynccontextmanager
@@ -40,6 +40,7 @@ app.include_router(projects.router)
 app.include_router(pages.router)
 app.include_router(code_samples.router)
 app.include_router(doc_pages.router)
+app.include_router(code_query.router)
 
 
 @app.get("/")

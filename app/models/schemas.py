@@ -152,3 +152,13 @@ class DocPageUpdate(UpdateModel):
     title: str | None = None
     content: str | None = None
 
+
+# Code Query models (Claude Agent SDK)
+class CodeQueryRequest(BaseModel):
+    query: str
+    repo_path: str
+
+
+class CodeQueryResponse(BaseModel):
+    answer: str
+
