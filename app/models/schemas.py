@@ -162,3 +162,14 @@ class CodeQueryRequest(BaseModel):
 class CodeQueryResponse(BaseModel):
     answer: str
 
+
+# Simple test model for structured outputs
+class SimpleCodebaseSummary(BaseModel):
+    """Simple schema to test structured outputs."""
+
+    primary_language: str
+    framework: str
+    total_files: int
+    has_tests: bool
+    summary: str
+

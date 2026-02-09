@@ -4,7 +4,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Type
 
-from claude_agent_sdk import query, ClaudeAgentOptions, AssistantMessage, TextBlock
+from claude_agent_sdk import query, ClaudeAgentOptions, AssistantMessage, TextBlock, ResultMessage
 from pydantic import BaseModel
 
 # Set up logging
@@ -112,16 +112,22 @@ async def query_codebase_json(
 
     last_text = ""
     stop_reason = None
-    all_messages = []
+    structured_output = None
+    result_subtype = None
 
     try:
         async for message in query(prompt=user_query, options=options):
-            all_messages.append(message)
-            if isinstance(message, AssistantMessage):
-                # Check for stop reason
+            # Capture structured output from ResultMessage
+            if isinstance(message, ResultMessage):
+                structured_output = message.structured_output
+                result_subtype = message.subtype
                 if hasattr(message, "stop_reason"):
                     stop_reason = message.stop_reason
 
+            # Also capture text for debugging/logging
+            if isinstance(message, AssistantMessage):
+                if hasattr(message, "stop_reason"):
+                    stop_reason = message.stop_reason
                 for block in message.content:
                     if isinstance(block, TextBlock):
                         last_text = block.text
@@ -132,50 +138,49 @@ async def query_codebase_json(
             "repo_path": repo_path,
             "schema": response_model.__name__,
             "query_length": len(user_query),
-            "response_length": len(last_text),
+            "response_length": len(last_text) if last_text else (len(json.dumps(structured_output)) if structured_output else 0),
             "stop_reason": stop_reason,
-            "raw_response": last_text,
+            "result_subtype": result_subtype,
+            "raw_response": last_text if last_text else (json.dumps(structured_output) if structured_output else ""),
+            "has_structured_output": structured_output is not None,
             "success": False,  # Will update if successful
         }
 
-        # Check if response is empty
-        if not last_text.strip():
-            log_data["error"] = "Empty response from agent"
-            log_data["stop_reason"] = stop_reason
+        # Check for structured output errors
+        if result_subtype == "error_max_structured_output_retries":
+            log_data["error"] = "Agent hit max retries trying to produce valid output"
             log_file.write_text(json.dumps(log_data, indent=2))
             raise ValueError(
-                f"Agent returned empty response. Stop reason: {stop_reason}. "
-                f"This may indicate: (1) max_tokens too low, (2) model refusal, "
-                f"or (3) schema too complex. Check log: {log_file}"
+                f"Agent could not produce valid output after multiple attempts. "
+                f"This usually means: (1) schema too complex, (2) task is ambiguous, "
+                f"or (3) required fields cannot be determined. Check log: {log_file}"
             )
 
-        # Parse JSON and validate with Pydantic
-        parsed = json.loads(last_text.strip())
-        validated = response_model.model_validate(parsed)
+        # Check if we got structured output
+        if structured_output is None:
+            log_data["error"] = "No structured output received from agent"
+            log_file.write_text(json.dumps(log_data, indent=2))
+            raise ValueError(
+                f"Agent did not return structured output. "
+                f"Result subtype: {result_subtype}. "
+                f"Check log: {log_file}"
+            )
+
+        # Validate with Pydantic (structured_output is already validated by SDK, but we double-check)
+        validated = response_model.model_validate(structured_output)
 
         # Mark as successful
         log_data["success"] = True
         log_file.write_text(json.dumps(log_data, indent=2))
 
-        logger.info(f"Successfully parsed response. Log: {log_file}")
+        logger.info(f"Successfully received structured output. Log: {log_file}")
         return validated
 
-    except json.JSONDecodeError as e:
-        log_data["error"] = f"JSON decode error: {str(e)}"
-        log_data["error_type"] = "JSONDecodeError"
-        log_file.write_text(json.dumps(log_data, indent=2))
-
-        logger.error(f"JSON decode failed. Log: {log_file}")
-        raise ValueError(
-            f"Agent returned invalid JSON: {str(e)}. "
-            f"Stop reason: {stop_reason}. "
-            f"Response length: {len(last_text)} chars. "
-            f"Check log: {log_file}"
-        ) from e
-
     except Exception as e:
-        log_data["error"] = str(e)
-        log_data["error_type"] = type(e).__name__
+        # Only log if we haven't already
+        if "error" not in log_data:
+            log_data["error"] = str(e)
+            log_data["error_type"] = type(e).__name__
         log_file.write_text(json.dumps(log_data, indent=2))
 
         logger.error(f"Error processing response: {e}. Log: {log_file}")
