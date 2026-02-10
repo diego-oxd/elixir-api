@@ -38,3 +38,6 @@ tickets/*
 scripts/outputs/*
 
 /logs/
+
+# Cloned repositories
+.repos/

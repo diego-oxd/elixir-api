@@ -39,6 +39,7 @@ class ProjectResponse(BaseModel):
     name: str
     description: str | None = None
     repo_path: str | None = None
+    repo_url: str | None = None
 
 
 class ProjectUpdate(UpdateModel):
@@ -46,6 +47,7 @@ class ProjectUpdate(UpdateModel):
 
     description: str | None = None
     repo_path: str | None = None
+    repo_url: str | None = None
 
 
 class ProjectListItem(BaseModel):
@@ -53,12 +55,19 @@ class ProjectListItem(BaseModel):
     name: str
     description: str | None = None
     repo_path: str | None = None
+    repo_url: str | None = None
 
 
 class AddCodebaseRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     repo_path: str
+
+
+class AddRepoRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    repo_url: str
 
 
 # Page models

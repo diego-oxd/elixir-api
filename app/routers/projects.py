@@ -1,3 +1,7 @@
+import re
+import shutil
+import subprocess
+from pathlib import Path
 from typing import Annotated
 
 import requests
@@ -15,6 +19,7 @@ from app.db import (
 )
 from app.models.schemas import (
     AddCodebaseRequest,
+    AddRepoRequest,
     ProjectCreate,
     ProjectListItem,
     ProjectResponse,
@@ -24,6 +29,7 @@ from app.models.schemas import (
 router = APIRouter(prefix="/projects", tags=["projects"])
 
 COLLECTION = "projects"
+REPOS_ROOT = Path(".repos")
 
 
 def _doc_to_response(doc: dict) -> dict:
@@ -31,6 +37,77 @@ def _doc_to_response(doc: dict) -> dict:
     result = {**doc}
     result["id"] = str(result.pop("_id"))
     return result
+
+
+def validate_github_url(url: str) -> tuple[bool, str | None]:
+    """
+    Validate GitHub URL and extract repo name.
+
+    Returns:
+        (is_valid, repo_name or error_message)
+    """
+    # Pattern: https://github.com/{owner}/{repo}(.git)?
+    pattern = r"^https://github\.com/([^/]+)/([^/]+?)(\.git)?$"
+    match = re.match(pattern, url)
+
+    if not match:
+        return False, "Invalid GitHub URL. Must be https://github.com/{owner}/{repo}"
+
+    owner, repo_name, _ = match.groups()
+
+    # Remove .git suffix if present
+    if repo_name.endswith('.git'):
+        repo_name = repo_name[:-4]
+
+    # Validate no path traversal
+    if '..' in repo_name or '/' in repo_name:
+        return False, "Invalid repository name"
+
+    return True, repo_name
+
+
+def clone_repository(repo_url: str, repo_name: str) -> tuple[bool, str]:
+    """
+    Clone repository to .repos/{repo_name}.
+    Deletes existing clone if present.
+
+    Returns:
+        (success, error_message or relative_path)
+    """
+    # Ensure .repos directory exists
+    REPOS_ROOT.mkdir(exist_ok=True)
+
+    clone_path = REPOS_ROOT / repo_name
+
+    # Delete existing clone if present
+    if clone_path.exists():
+        print(f"[INFO] Removing existing clone at {clone_path}")
+        shutil.rmtree(clone_path)
+
+    # Clone repository
+    try:
+        print(f"[INFO] Cloning {repo_url} to {clone_path}")
+        result = subprocess.run(
+            ["git", "clone", repo_url, str(clone_path)],
+            capture_output=True,
+            text=True,
+            timeout=300  # 5 minute timeout
+        )
+
+        if result.returncode != 0:
+            error_msg = result.stderr or result.stdout or "Unknown error"
+            return False, f"Git clone failed: {error_msg}"
+
+        # Return relative path
+        relative_path = str(clone_path)
+        return True, relative_path
+
+    except subprocess.TimeoutExpired:
+        return False, "Clone operation timed out (5 minute limit)"
+    except FileNotFoundError:
+        return False, "git command not found. Is git installed?"
+    except Exception as e:
+        return False, f"Unexpected error during clone: {str(e)}"
 
 
 # Title mapping for generated pages
@@ -104,6 +181,7 @@ def list_projects(db: Annotated[PostgresDatabase, Depends(get_db_dependency)]):
             "name": item["name"],
             "description": item.get("description"),
             "repo_path": item.get("repo_path"),
+            "repo_url": item.get("repo_url"),
         }
         for item in items
     ]
@@ -194,3 +272,52 @@ def add_codebase(
     )
 
     return _doc_to_response(item)
+
+
+@router.post("/{project_id}/add-repo", response_model=ProjectResponse)
+def add_repo(
+    project_id: str,
+    request: AddRepoRequest,
+    db: Annotated[PostgresDatabase, Depends(get_db_dependency)],
+):
+    """
+    Clone a GitHub repository and associate it with a project.
+
+    This endpoint:
+    1. Validates the GitHub URL
+    2. Clones the repository to .repos/{repo_name}
+    3. Stores the relative path and URL in the project record
+    4. Returns immediately (no background tasks)
+    """
+    # Verify project exists
+    project = get_item_by_id(db, COLLECTION, project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    # Validate GitHub URL
+    is_valid, result = validate_github_url(request.repo_url)
+    if not is_valid:
+        raise HTTPException(status_code=400, detail=result)
+
+    repo_name = result
+
+    # Clone repository
+    success, result = clone_repository(request.repo_url, repo_name)
+    if not success:
+        raise HTTPException(status_code=400, detail=result)
+
+    repo_path = result  # Relative path like .repos/my-repo
+
+    # Update project in database
+    update_data = {
+        "repo_path": repo_path,
+        "repo_url": request.repo_url
+    }
+    update_item(db, COLLECTION, project_id, update_data)
+
+    # Fetch updated project
+    updated_project = get_item_by_id(db, COLLECTION, project_id)
+
+    print(f"[INFO] Successfully added repo {repo_name} to project {project_id}")
+
+    return _doc_to_response(updated_project)
