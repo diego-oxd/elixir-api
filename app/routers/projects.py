@@ -382,12 +382,12 @@ def add_repo(
     update_item(db, COLLECTION, project_id, update_data)
 
     # Spawn background task for documentation generation using Claude SDK
-    background_tasks.add_task(
-        generate_documentation_with_claude,
-        project_id,
-        repo_path,
-        db
-    )
+    # background_tasks.add_task(
+    #     generate_documentation_with_claude,
+    #     project_id,
+    #     repo_path,
+    #     db
+    # )
 
     # Fetch updated project
     updated_project = get_item_by_id(db, COLLECTION, project_id)

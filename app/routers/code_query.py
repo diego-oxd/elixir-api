@@ -9,7 +9,7 @@ from app.models.schemas import (
     SimpleCodebaseSummary,
 )
 from app.services.agent import query_codebase, query_codebase_json
-from app.services.api_prompt import APIDocumentation, api_prompt
+from app.services.prompts import prompts
 
 router = APIRouter(prefix="/code-query", tags=["code-query"])
 
@@ -76,34 +76,48 @@ async def test_structured_output(repo_path: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.post("/analyze-api", response_model=APIDocumentation)
-async def analyze_api_endpoints(repo_path: str):
+@router.post("/generate-docs")
+async def generate_documentation(repo_path: str, prompt_name: str):
     """
-    Analyze a codebase and extract all API endpoints with their schemas.
+    Generate documentation for a codebase using a specified prompt.
 
     Uses Claude's structured outputs feature to guarantee the response
-    matches the APIDocumentation schema. This may take 30-90 seconds
-    for large codebases.
+    matches the prompt's schema. This may take 30-90 seconds for large codebases.
 
     All responses (success and failure) are logged to logs/agent_responses/
     for debugging and auditing.
 
     Args:
         repo_path: Absolute path to the repository to analyze
+        prompt_name: Name of the prompt to use. Available options:
+            - "api": API endpoints documentation
+            - "data_model": Data model structure documentation
+            - "project_overview": High-level project overview
+            - "frontend": Frontend components and structure
 
     Returns:
-        APIDocumentation: Structured documentation of all API endpoints including
-        inputs, outputs, authentication, and file locations.
+        Structured documentation matching the prompt's schema.
 
     Raises:
+        400: If the prompt_name is not recognized
         502: If the agent response is invalid (with log file path for debugging)
         500: Other unexpected errors
     """
+    # Validate prompt name
+    if prompt_name not in prompts:
+        available_prompts = ", ".join(prompts.keys())
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unknown prompt name '{prompt_name}'. Available prompts: {available_prompts}",
+        )
+
+    prompt_config = prompts[prompt_name]
+
     try:
         result = await query_codebase_json(
-            user_query=api_prompt["prompt_template"],
+            user_query=prompt_config["prompt_template"],
             repo_path=repo_path,
-            response_model=api_prompt["schema"],
+            response_model=prompt_config["schema"],
         )
         return result
     except ValueError as e:
