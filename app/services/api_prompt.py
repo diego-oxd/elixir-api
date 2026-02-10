@@ -72,7 +72,7 @@ Return a structured JSON object according to the `APIDocumentation` schema. Ensu
 
 
 api_prompt = {
-    "name": "api_endpoint_analyzer",
+    "name": "api",
     "description": "Analyzes API endpoints and provides detailed information about their structure and functionality.",
     "prompt_template": prompt,
     "schema": APIDocumentation,

@@ -25,6 +25,8 @@ from app.models.schemas import (
     ProjectResponse,
     ProjectUpdate,
 )
+from app.services.prompts import prompts
+from app.services.agent import query_codebase_json
 
 router = APIRouter(prefix="/projects", tags=["projects"])
 
@@ -114,7 +116,7 @@ def clone_repository(repo_url: str, repo_name: str) -> tuple[bool, str]:
 PAGE_TITLES = {
     "api": "API Overview",
     "data_model": "Data Model",
-    "frontend_components": "Frontend Components",
+    "frontend": "Frontend Components",
     "project_overview": "Project Overview",
 }
 
@@ -167,6 +169,69 @@ def generate_documentation_background(project_id: str, repo_path: str, db: Postg
         print(f"[ERROR] Documentation generation timed out for project {project_id} (20 min limit)")
     except requests.exceptions.RequestException as e:
         print(f"[ERROR] GraphRag request failed for project {project_id}: {e}")
+    except Exception as e:
+        print(f"[ERROR] Documentation generation failed for project {project_id}: {e}")
+
+
+async def generate_documentation_with_claude(
+    project_id: str,
+    repo_path: str,
+    db: PostgresDatabase
+):
+    """
+    Background task that uses Claude Agent SDK to generate documentation
+    for all configured prompts and saves pages to the database.
+    """
+    print(f"[INFO] Starting Claude-based documentation generation for project {project_id}, repo: {repo_path}")
+
+    try:
+        # 1. Delete existing pages for this project (replacement strategy)
+        page_names = list(prompts.keys())
+        deleted_count = delete_items_by_filter(
+            db,
+            "pages",
+            {
+                "project_id": project_id,
+                "name": {"$in": page_names}
+            }
+        )
+        print(f"[INFO] Deleted {deleted_count} existing pages for project {project_id}")
+
+        # 2. Generate documentation for each prompt
+        for prompt_name, prompt_data in prompts.items():
+            try:
+                print(f"[INFO] Generating '{prompt_name}' documentation for project {project_id}")
+
+                # Call Claude Agent SDK with structured output
+                result = await query_codebase_json(
+                    user_query=prompt_data["prompt_template"],
+                    repo_path=repo_path,
+                    response_model=prompt_data["schema"],
+                )
+
+                # Serialize Pydantic model to dict for JSONB storage
+                content_dict = result.model_dump()
+
+                # Get title from PAGE_TITLES or fallback to prompt name
+                title = PAGE_TITLES.get(prompt_name, prompt_name.replace("_", " ").title())
+
+                # Save page to database
+                page_doc = {
+                    "project_id": project_id,
+                    "name": prompt_name,
+                    "title": title,
+                    "content": content_dict,
+                }
+                add_item(db, "pages", page_doc)
+                print(f"[INFO] Saved page '{prompt_name}' for project {project_id}")
+
+            except Exception as e:
+                # Log error but continue with other prompts
+                print(f"[ERROR] Failed to generate '{prompt_name}' for project {project_id}: {e}")
+                continue
+
+        print(f"[INFO] Claude-based documentation generation completed for project {project_id}")
+
     except Exception as e:
         print(f"[ERROR] Documentation generation failed for project {project_id}: {e}")
 
@@ -278,6 +343,7 @@ def add_codebase(
 def add_repo(
     project_id: str,
     request: AddRepoRequest,
+    background_tasks: BackgroundTasks,
     db: Annotated[PostgresDatabase, Depends(get_db_dependency)],
 ):
     """
@@ -287,7 +353,7 @@ def add_repo(
     1. Validates the GitHub URL
     2. Clones the repository to .repos/{repo_name}
     3. Stores the relative path and URL in the project record
-    4. Returns immediately (no background tasks)
+    4. Spawns background task to generate documentation using Claude Agent SDK
     """
     # Verify project exists
     project = get_item_by_id(db, COLLECTION, project_id)
@@ -314,6 +380,14 @@ def add_repo(
         "repo_url": request.repo_url
     }
     update_item(db, COLLECTION, project_id, update_data)
+
+    # Spawn background task for documentation generation using Claude SDK
+    background_tasks.add_task(
+        generate_documentation_with_claude,
+        project_id,
+        repo_path,
+        db
+    )
 
     # Fetch updated project
     updated_project = get_item_by_id(db, COLLECTION, project_id)
