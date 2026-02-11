@@ -1,6 +1,6 @@
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class UpdateModel(BaseModel):
@@ -181,4 +181,74 @@ class SimpleCodebaseSummary(BaseModel):
     total_files: int
     has_tests: bool
     summary: str
+
+
+# Session models
+class CreateSessionRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    project_id: str
+    name: str | None = None
+
+
+class CreateSessionResponse(BaseModel):
+    session_id: str
+    created_at: str  # ISO format datetime
+    project_id: str
+    name: str | None = None
+
+
+class SessionInfo(BaseModel):
+    session_id: str
+    created_at: str  # ISO format datetime
+    last_accessed: str  # ISO format datetime
+    project_id: str
+    message_count: int
+    name: str | None = None
+
+
+class SessionDetail(SessionInfo):
+    message_history: list[dict]
+
+
+class ListSessionsResponse(BaseModel):
+    sessions: list[SessionInfo]
+    count: int
+
+
+class UpdateSessionRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    name: str | None = None
+
+
+class UpdateSessionResponse(BaseModel):
+    session_id: str
+    name: str | None = None
+    message: str
+
+
+class DeleteSessionResponse(BaseModel):
+    success: bool
+    session_id: str
+    message: str
+
+
+# Chat models
+class ChatRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    message: str = Field(..., min_length=1)
+
+
+class ToolCallInfo(BaseModel):
+    tool_name: str
+    args: dict
+
+
+class ChatResponse(BaseModel):
+    session_id: str
+    response: str
+    tool_calls: list[ToolCallInfo] = []
+    message_count: int
 

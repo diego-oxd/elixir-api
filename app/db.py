@@ -124,6 +124,7 @@ TABLE_COLUMNS = {
     "pages": ["id", "project_id", "name", "title", "content"],
     "code_samples": ["id", "project_id", "title", "language", "description", "code_string"],
     "doc_pages": ["id", "project_id", "title", "content"],
+    "sessions": ["id", "project_id", "name", "created_at", "last_accessed", "message_history"],
 }
 
 
