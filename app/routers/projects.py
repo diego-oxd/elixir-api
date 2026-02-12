@@ -26,7 +26,7 @@ from app.models.schemas import (
     ProjectUpdate,
 )
 from app.services.prompts import prompts
-from app.services.agent import query_codebase_json
+from app.services.agent import query_codebase_json, query_codebase_markdown
 
 router = APIRouter(prefix="/projects", tags=["projects"])
 
@@ -202,26 +202,47 @@ async def generate_documentation_with_claude(
             try:
                 print(f"[INFO] Generating '{prompt_name}' documentation for project {project_id}")
 
-                # Call Claude Agent SDK with structured output
-                result = await query_codebase_json(
-                    user_query=prompt_data["prompt_template"],
-                    repo_path=repo_path,
-                    response_model=prompt_data["schema"],
-                )
-
-                # Serialize Pydantic model to dict for JSONB storage
-                content_dict = result.model_dump()
-
                 # Get title from PAGE_TITLES or fallback to prompt name
                 title = PAGE_TITLES.get(prompt_name, prompt_name.replace("_", " ").title())
 
-                # Save page to database
-                page_doc = {
-                    "project_id": project_id,
-                    "name": prompt_name,
-                    "title": title,
-                    "content": content_dict,
-                }
+                # Check if this is a markdown prompt or structured prompt
+                if prompt_data["schema"] is None:
+                    # Markdown prompt (overview, frontend)
+                    print(f"[INFO] Using markdown output for '{prompt_name}'")
+                    markdown_result = await query_codebase_markdown(
+                        user_query=prompt_data["prompt_template"],
+                        repo_path=repo_path,
+                    )
+
+                    # Save page with markdown_content
+                    page_doc = {
+                        "project_id": project_id,
+                        "name": prompt_name,
+                        "title": title,
+                        "content": {},  # Empty dict for markdown pages
+                        "markdown_content": markdown_result,
+                    }
+                else:
+                    # Structured prompt (api, data_model)
+                    print(f"[INFO] Using structured output for '{prompt_name}'")
+                    result = await query_codebase_json(
+                        user_query=prompt_data["prompt_template"],
+                        repo_path=repo_path,
+                        response_model=prompt_data["schema"],
+                    )
+
+                    # Serialize Pydantic model to dict for JSONB storage
+                    content_dict = result.model_dump()
+
+                    # Save page with structured content
+                    page_doc = {
+                        "project_id": project_id,
+                        "name": prompt_name,
+                        "title": title,
+                        "content": content_dict,
+                        "markdown_content": None,
+                    }
+
                 add_item(db, "pages", page_doc)
                 print(f"[INFO] Saved page '{prompt_name}' for project {project_id}")
 

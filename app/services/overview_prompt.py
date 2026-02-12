@@ -1,5 +1,3 @@
-from pydantic import BaseModel
-
 overview_prompt_template = """
 # Codebase Onboarding & Familiarization Prompt
 
@@ -172,17 +170,28 @@ Before returning the onboarding guide, verify:
 - [ ] The guide is easy to follow and skimmable
 - [ ] Code examples (if included) are real snippets from the project
 - [ ] Technical terms are explained when first introduced
+
+## CRITICAL: Markdown Output Format
+
+**IMPORTANT**: Your response must be PURE MARKDOWN ONLY. Do NOT wrap it in JSON or any other format.
+
+Guidelines for markdown formatting:
+- Use standard markdown syntax (headers, lists, code blocks, tables)
+- Avoid characters that could cause parsing issues when stored/transmitted
+- For code blocks, use triple backticks with language identifiers
+- For inline code or technical terms, use single backticks
+- For emphasis, prefer **bold** over quotes
+- If you need quotes in text, prefer single quotes (') or backticks (`) over double quotes (")
+- Ensure proper escaping of special markdown characters when needed
+- The output will be stored as plain text and rendered by a markdown parser
+
+The markdown should be ready for immediate display in a markdown renderer without any additional processing.
 """
 
 
-class OutputSchema(BaseModel):
-    overview_notes: str
-    full_overview_document: str
-
-
 project_overview_prompt = {
-    "name": "project_overview",
-    "description": "Provides a comprehensive overview of the entire codebase, including architecture, data flow, key components, and technology stack.",
-    "prompt_template": overview_prompt_template,
-    "schema": OutputSchema,
+   "name": "project_overview",
+   "description": "Provides a comprehensive overview of the entire codebase, including architecture, data flow, key components, and technology stack.",
+   "prompt_template": overview_prompt_template,
+   "schema": None,  # Returns raw markdown, not structured JSON
 }

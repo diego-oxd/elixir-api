@@ -8,7 +8,7 @@ from app.models.schemas import (
     CodeQueryResponse,
     SimpleCodebaseSummary,
 )
-from app.services.agent import query_codebase, query_codebase_json
+from app.services.agent import query_codebase, query_codebase_json, query_codebase_markdown
 from app.services.prompts import prompts
 
 router = APIRouter(prefix="/code-query", tags=["code-query"])
@@ -114,12 +114,23 @@ async def generate_documentation(repo_path: str, prompt_name: str):
     prompt_config = prompts[prompt_name]
 
     try:
-        result = await query_codebase_json(
-            user_query=prompt_config["prompt_template"],
-            repo_path=repo_path,
-            response_model=prompt_config["schema"],
-        )
-        return result
+        # Check if this is a markdown prompt or structured prompt
+        if prompt_config["schema"] is None:
+            # Markdown prompt (overview, frontend)
+            result = await query_codebase_markdown(
+                user_query=prompt_config["prompt_template"],
+                repo_path=repo_path,
+            )
+            # Return markdown as a simple dict
+            return {"markdown": result}
+        else:
+            # Structured prompt (api, data_model)
+            result = await query_codebase_json(
+                user_query=prompt_config["prompt_template"],
+                repo_path=repo_path,
+                response_model=prompt_config["schema"],
+            )
+            return result
     except ValueError as e:
         # These errors include the log file path
         raise HTTPException(
