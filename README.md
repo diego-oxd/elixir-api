@@ -20,15 +20,16 @@ API for managing projects, pages, code samples, and documentation.
 
 ### 1. Start the Database
 
-The API uses FerretDB (MongoDB-compatible) with PostgreSQL as the backend. Start it with Docker Compose:
+The API uses PostgreSQL as the database backend. Start it with Docker Compose:
 
 ```bash
 docker-compose up -d
 ```
 
 This starts:
-- PostgreSQL on port 5432 (internal)
-- FerretDB on port 27017 (MongoDB protocol)
+- PostgreSQL on port 5432
+
+The database will be automatically initialized with the current schema on first run via `scripts/init_db.sql`.
 
 ### 2. Configure Environment Variables
 
@@ -42,8 +43,7 @@ Environment variables:
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `MONGODB_URI` | MongoDB connection string | `mongodb://localhost:27017` |
-| `MONGODB_DATABASE` | Database name | `app` |
+| `DATABASE_URL` | PostgreSQL connection string | `postgresql://app_user:app_password@localhost:5432/knowledge_extraction` |
 
 ### 3. Install Dependencies
 
@@ -66,6 +66,110 @@ uvicorn app.main:app --reload
 The API will be available at `http://localhost:8000`.
 
 Interactive documentation is available at `http://localhost:8000/docs`.
+
+### 5. Running Database Migrations (For Existing Installations)
+
+If you're pulling updates that include database schema changes, run pending migrations:
+
+```bash
+yoyo apply
+```
+
+To check which migrations have been applied:
+
+```bash
+yoyo list
+```
+
+To see migrations that are pending:
+
+```bash
+yoyo list --pending
+```
+
+**Note**: Fresh installations (first-time `docker-compose up`) don't need to run migrations manually - the schema is created automatically via `init_db.sql`.
+
+---
+
+## Database Migrations
+
+This project uses [yoyo-migrations](https://ollycope.com/software/yoyo/latest/) for database schema versioning.
+
+### Migration Files
+
+Migration files are located in the `migrations/` directory and follow this naming convention:
+
+```
+{sequence}_{description}.sql
+```
+
+Example: `005_add_user_preferences_table.sql`
+
+### Creating a New Migration
+
+When you need to modify the database schema:
+
+1. **Create a new migration file** in the `migrations/` directory:
+
+```bash
+yoyo new -m "add_column_description" migrations/
+```
+
+2. **Edit the generated file** with your SQL changes:
+
+```sql
+-- Migration: Add new_column to table_name
+-- migrate: apply
+
+ALTER TABLE table_name ADD COLUMN new_column VARCHAR(255);
+
+-- migrate: rollback
+
+ALTER TABLE table_name DROP COLUMN new_column;
+```
+
+3. **Test the migration** on your local database:
+
+```bash
+yoyo apply
+```
+
+4. **Verify the changes** worked as expected
+
+5. **Commit the migration file** along with your code changes
+
+### Migration Best Practices
+
+- **Always include rollback**: Every migration should have both `apply` and `rollback` sections
+- **Test migrations locally**: Run and test migrations before committing
+- **One change per migration**: Keep migrations focused on a single logical change
+- **Descriptive names**: Use clear, descriptive names for migration files
+- **Never modify applied migrations**: Once a migration is committed and applied, create a new migration for further changes
+- **Update TABLE_COLUMNS**: After adding/removing columns, update the `TABLE_COLUMNS` dictionary in `app/db.py`
+
+### Rollback a Migration
+
+If you need to undo the last applied migration:
+
+```bash
+yoyo rollback
+```
+
+To rollback to a specific migration:
+
+```bash
+yoyo rollback --revision {migration_id}
+```
+
+### Configuration
+
+The database connection is configured in `yoyo.ini`. By default, it connects to:
+
+```
+postgresql://app_user:app_password@localhost:5432/knowledge_extraction
+```
+
+You can override this with the `DATABASE_URL` environment variable.
 
 ---
 

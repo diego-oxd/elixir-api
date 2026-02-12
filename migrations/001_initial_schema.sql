@@ -1,5 +1,7 @@
--- Database initialization script for Knowledge Extraction API
--- This script creates all necessary tables and indexes
+-- Initial database schema for Knowledge Extraction API
+-- This migration represents the baseline schema after all historical migrations have been applied
+--
+-- migrate: apply
 
 -- Enable UUID extension
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
@@ -100,3 +102,25 @@ CREATE TRIGGER update_doc_pages_updated_at BEFORE UPDATE ON doc_pages
 
 CREATE TRIGGER update_sessions_updated_at BEFORE UPDATE ON sessions
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+-- migrate: rollback
+
+-- Drop triggers
+DROP TRIGGER IF EXISTS update_sessions_updated_at ON sessions;
+DROP TRIGGER IF EXISTS update_doc_pages_updated_at ON doc_pages;
+DROP TRIGGER IF EXISTS update_code_samples_updated_at ON code_samples;
+DROP TRIGGER IF EXISTS update_pages_updated_at ON pages;
+DROP TRIGGER IF EXISTS update_projects_updated_at ON projects;
+
+-- Drop function
+DROP FUNCTION IF EXISTS update_updated_at_column();
+
+-- Drop tables (in reverse order due to foreign keys)
+DROP TABLE IF EXISTS sessions;
+DROP TABLE IF EXISTS doc_pages;
+DROP TABLE IF EXISTS code_samples;
+DROP TABLE IF EXISTS pages;
+DROP TABLE IF EXISTS projects;
+
+-- Drop extension
+DROP EXTENSION IF EXISTS "uuid-ossp";
