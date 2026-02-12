@@ -78,6 +78,7 @@ class PageCreate(BaseModel):
     title: str
     content: str
     project_id: str
+    markdown_content: str | None = None
 
 
 class PageResponse(BaseModel):
@@ -88,6 +89,7 @@ class PageResponse(BaseModel):
     title: str
     content: str
     project_id: str
+    markdown_content: str | None = None
 
 
 class PageUpdate(UpdateModel):

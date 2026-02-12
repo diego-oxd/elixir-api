@@ -41,6 +41,59 @@ async def query_codebase(user_query: str, repo_path: str) -> str:
     return last_text
 
 
+async def query_codebase_markdown(
+    user_query: str,
+    repo_path: str,
+    system_prompt: str | None = None,
+) -> str:
+    """
+    Query a codebase and return plain markdown documentation.
+
+    This function is optimized for generating markdown documentation
+    without structured output constraints. The response is pure markdown text
+    ready for storage and rendering.
+
+    Args:
+        user_query: The documentation prompt/question
+        repo_path: Absolute path to the repository
+        system_prompt: Optional system prompt (defaults to markdown-focused prompt)
+
+    Returns:
+        Plain markdown text
+
+    Raises:
+        ValueError: If no text response is received
+    """
+    if system_prompt is None:
+        system_prompt = (
+            "You are a technical documentation expert analyzing codebases. "
+            "Generate clear, well-structured markdown documentation. "
+            "Return ONLY markdown - do not wrap in JSON or any other format. "
+            "Use proper markdown syntax and avoid characters that cause parsing issues."
+        )
+
+    options = ClaudeAgentOptions(
+        allowed_tools=["Read", "Glob", "Grep"],
+        cwd=repo_path,
+        system_prompt=system_prompt,
+    )
+
+    logger.info(f"Starting markdown documentation generation for {repo_path}")
+
+    last_text = ""
+    async for message in query(prompt=user_query, options=options):
+        if isinstance(message, AssistantMessage):
+            for block in message.content:
+                if isinstance(block, TextBlock):
+                    last_text = block.text
+
+    if not last_text:
+        raise ValueError("No markdown content received from agent")
+
+    logger.info(f"Successfully generated markdown documentation ({len(last_text)} chars)")
+    return last_text
+
+
 async def query_codebase_json(
     user_query: str,
     repo_path: str,

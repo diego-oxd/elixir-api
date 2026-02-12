@@ -21,13 +21,26 @@ COLLECTION = "pages"
 
 
 def _doc_to_response(doc: dict) -> dict:
-    """Convert MongoDB document to response format."""
+    """Convert MongoDB document to response format.
+
+    Handles both markdown pages (with markdown_content) and structured pages (with content JSONB).
+    Exposes both fields in the response for flexibility.
+    """
     result = {**doc}
     result["id"] = str(result.pop("_id"))
 
+    # Handle structured content (JSONB) - serialize to JSON string
     if "content" in result:
-        result['content'] = json.dumps(result['content'], ensure_ascii=False, indent=2)
-    
+        if result["content"]:
+            # Non-empty content: serialize to JSON string
+            result['content'] = json.dumps(result['content'], ensure_ascii=False, indent=2)
+        else:
+            # Empty content (markdown pages): convert to empty JSON string
+            result['content'] = json.dumps(result['content'])  # "{}" for empty dict
+
+    # markdown_content is already a string (TEXT column), no conversion needed
+    # Both fields are exposed in the response
+
     return result
 
 
