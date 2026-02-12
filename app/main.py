@@ -1,6 +1,7 @@
 import logging
 from contextlib import asynccontextmanager
 
+from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -8,6 +9,9 @@ from app.db import close_pool, get_pool
 from app.dependencies import set_session_manager
 from app.routers import chat, code_query, code_samples, doc_pages, pages, projects, sessions
 from app.services.sessions import SessionManager
+
+# Load environment variables from .env file
+load_dotenv()
 
 logger = logging.getLogger(__name__)
 

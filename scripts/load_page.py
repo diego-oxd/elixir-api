@@ -143,13 +143,13 @@ def load_page_from_json(
 if __name__ == "__main__":
     # Configuration - update these values as needed
     project_id = "a4042b78-d583-41c7-b843-3460c5b5f2a3"
-    page_name = "project_overview"  # Unique name/identifier for the page
-    page_title = "Project Overview"  # Display title for the page
+    page_name = "frontend"  # Unique name/identifier for the page
+    page_title = "Frontend"  # Display title for the page
 
     # The script automatically detects file type by extension:
     # - Use .json for structured pages (api, data_model)
     # - Use .md for markdown pages (overview, frontend)
-    file_path = "./scripts/outputs/overview.md"  # or overview.json
+    file_path = "./scripts/outputs/frontend_20260212_103037.md"  # or frontend.json
 
     # Load the page
     result = load_page(
