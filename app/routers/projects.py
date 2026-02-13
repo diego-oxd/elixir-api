@@ -1,3 +1,4 @@
+import asyncio
 import re
 import shutil
 import subprocess
@@ -173,13 +174,13 @@ def generate_documentation_background(project_id: str, repo_path: str, db: Postg
         print(f"[ERROR] Documentation generation failed for project {project_id}: {e}")
 
 
-async def generate_documentation_with_claude(
+async def _generate_documentation_with_claude_async(
     project_id: str,
     repo_path: str,
     db: PostgresDatabase
 ):
     """
-    Background task that uses Claude Agent SDK to generate documentation
+    Async helper that uses Claude Agent SDK to generate documentation
     for all configured prompts and saves pages to the database.
     """
     print(f"[INFO] Starting Claude-based documentation generation for project {project_id}, repo: {repo_path}")
@@ -255,6 +256,26 @@ async def generate_documentation_with_claude(
 
     except Exception as e:
         print(f"[ERROR] Documentation generation failed for project {project_id}: {e}")
+
+
+def generate_documentation_with_claude(
+    project_id: str,
+    repo_path: str,
+    db: PostgresDatabase
+):
+    """
+    Synchronous wrapper that runs the async documentation generation
+    in a new event loop, preventing it from blocking the main FastAPI event loop.
+    """
+    # Create a new event loop for this thread
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    try:
+        loop.run_until_complete(
+            _generate_documentation_with_claude_async(project_id, repo_path, db)
+        )
+    finally:
+        loop.close()
 
 
 @router.get("", response_model=list[ProjectListItem])
@@ -403,12 +424,12 @@ def add_repo(
     update_item(db, COLLECTION, project_id, update_data)
 
     # Spawn background task for documentation generation using Claude SDK
-    # background_tasks.add_task(
-    #     generate_documentation_with_claude,
-    #     project_id,
-    #     repo_path,
-    #     db
-    # )
+    background_tasks.add_task(
+        generate_documentation_with_claude,
+        project_id,
+        repo_path,
+        db
+    )
 
     # Fetch updated project
     updated_project = get_item_by_id(db, COLLECTION, project_id)
