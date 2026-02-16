@@ -8,6 +8,7 @@ from datetime import datetime, timedelta, timezone
 
 from app.db import PostgresDatabase, get_item_by_id
 from app.models.schemas import SessionInfo
+from app.models.session_types import SessionType
 
 logger = logging.getLogger(__name__)
 
@@ -23,6 +24,7 @@ class APISession:
     repo_path: str
     message_history: list[dict] = field(default_factory=list)
     name: str | None = None
+    session_type: SessionType = SessionType.GENERAL
 
     def to_info(self) -> SessionInfo:
         """Convert to SessionInfo model for API responses."""
@@ -33,6 +35,7 @@ class APISession:
             project_id=self.project_id,
             message_count=len(self.message_history),
             name=self.name,
+            session_type=self.session_type.value,
         )
 
 
@@ -80,7 +83,11 @@ class SessionManager:
                 logger.error(f"Error in cleanup loop: {e}")
 
     async def create_session(
-        self, project_id: str, db: PostgresDatabase, name: str | None = None
+        self,
+        project_id: str,
+        db: PostgresDatabase,
+        name: str | None = None,
+        session_type: SessionType | None = None,
     ) -> APISession:
         """Create a new session for a project.
 
@@ -88,6 +95,7 @@ class SessionManager:
             project_id: The project ID to create a session for
             db: Database instance to fetch project info
             name: Optional name for the session
+            session_type: Type of session (defaults to GENERAL)
 
         Returns:
             The created APISession
@@ -119,10 +127,14 @@ class SessionManager:
             repo_path=repo_path,
             message_history=[],
             name=name,
+            session_type=session_type or SessionType.GENERAL,
         )
 
         self._sessions[session_id] = session
-        logger.info(f"Created session {session_id} for project {project_id}")
+        logger.info(
+            f"Created session {session_id} for project {project_id} "
+            f"with type {session.session_type.value}"
+        )
 
         return session
 

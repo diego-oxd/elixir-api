@@ -191,6 +191,7 @@ class CreateSessionRequest(BaseModel):
 
     project_id: str
     name: str | None = None
+    session_type: str | None = None
 
 
 class CreateSessionResponse(BaseModel):
@@ -198,6 +199,7 @@ class CreateSessionResponse(BaseModel):
     created_at: str  # ISO format datetime
     project_id: str
     name: str | None = None
+    session_type: str
 
 
 class SessionInfo(BaseModel):
@@ -207,6 +209,7 @@ class SessionInfo(BaseModel):
     project_id: str
     message_count: int
     name: str | None = None
+    session_type: str
 
 
 class SessionDetail(SessionInfo):

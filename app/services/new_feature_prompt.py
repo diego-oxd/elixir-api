@@ -1,4 +1,4 @@
-prompt_template = """
+new_feature_prompt_template = """
 
 # Feature Implementation Guide
 

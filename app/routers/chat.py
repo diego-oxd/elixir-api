@@ -7,6 +7,8 @@ from fastapi import APIRouter
 
 from app.dependencies import SessionDep
 from app.models.schemas import ChatRequest, ChatResponse
+from app.models.session_types import SessionType
+from app.services.prompt_templates import get_template_for_type
 from app.services.sessions import build_chat_prompt
 
 logger = logging.getLogger(__name__)
@@ -21,6 +23,9 @@ async def chat(session: SessionDep, request: ChatRequest):
     Claude SDK will automatically use Read, Glob, and Grep tools to explore
     the codebase as needed.
 
+    For sessions with special types (e.g., NEW_FEATURE), the first message
+    uses a predefined template. Subsequent messages use normal conversation flow.
+
     Args:
         session: The session from dependency injection
         request: The chat request with user message
@@ -28,8 +33,21 @@ async def chat(session: SessionDep, request: ChatRequest):
     Returns:
         ChatResponse with Claude's response and metadata
     """
-    # Build prompt with conversation history
-    prompt = build_chat_prompt(session.message_history, request.message)
+    # Determine which prompt to use based on session type and message history
+    is_first_message = len(session.message_history) == 0
+    is_special_type = session.session_type != SessionType.GENERAL
+
+    if is_first_message and is_special_type:
+        # First message with special type - use template
+        logger.info(
+            f"Using template for session {session.session_id} "
+            f"with type {session.session_type.value}"
+        )
+        template_func = get_template_for_type(session.session_type)
+        prompt = template_func(request.message)
+    else:
+        # Normal flow - build prompt from conversation history
+        prompt = build_chat_prompt(session.message_history, request.message)
 
     # Configure Claude Agent SDK
     options = ClaudeAgentOptions(

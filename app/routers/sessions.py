@@ -16,6 +16,7 @@ from app.models.schemas import (
     UpdateSessionRequest,
     UpdateSessionResponse,
 )
+from app.models.session_types import SessionType
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -38,17 +39,31 @@ async def create_session(
         CreateSessionResponse with session details
 
     Raises:
-        HTTPException: 404 if project not found, 400 if repo_path not set
+        HTTPException: 404 if project not found, 400 if repo_path not set or invalid session_type
     """
+    # Parse and validate session_type
+    session_type = None
+    if request.session_type:
+        try:
+            session_type = SessionType(request.session_type)
+        except ValueError:
+            valid_types = [t.value for t in SessionType]
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid session_type '{request.session_type}'. "
+                f"Valid types: {valid_types}",
+            )
+
     try:
         session = await session_manager.create_session(
-            request.project_id, db, name=request.name
+            request.project_id, db, name=request.name, session_type=session_type
         )
         return CreateSessionResponse(
             session_id=session.session_id,
             created_at=session.created_at.isoformat(),
             project_id=session.project_id,
             name=session.name,
+            session_type=session.session_type.value,
         )
     except ValueError as e:
         error_msg = str(e)
