@@ -120,7 +120,7 @@ def get_db_dependency() -> Generator[PostgresDatabase, None, None]:
 
 # Define which columns belong to each table
 TABLE_COLUMNS = {
-    "projects": ["id", "name", "description", "repo_path", "repo_url"],
+    "projects": ["id", "name", "description", "repo_path", "repo_url", "docs_last_commit"],
     "pages": ["id", "project_id", "name", "title", "content", "markdown_content"],
     "code_samples": ["id", "project_id", "title", "language", "description", "code_string"],
     "doc_pages": ["id", "project_id", "title", "content"],

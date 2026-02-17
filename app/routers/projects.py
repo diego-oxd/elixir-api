@@ -174,10 +174,28 @@ def generate_documentation_background(project_id: str, repo_path: str, db: Postg
         print(f"[ERROR] Documentation generation failed for project {project_id}: {e}")
 
 
+def get_local_head_commit(repo_path: str) -> str | None:
+    """Return the current HEAD commit hash for the given local repo."""
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            cwd=repo_path,
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        if result.returncode == 0:
+            return result.stdout.strip()
+    except Exception:
+        pass
+    return None
+
+
 async def _generate_documentation_with_claude_async(
     project_id: str,
     repo_path: str,
-    db: PostgresDatabase
+    db: PostgresDatabase,
+    docs_commit: str | None = None,
 ):
     """
     Async helper that uses Claude Agent SDK to generate documentation
@@ -252,6 +270,10 @@ async def _generate_documentation_with_claude_async(
                 print(f"[ERROR] Failed to generate '{prompt_name}' for project {project_id}: {e}")
                 continue
 
+        if docs_commit:
+            update_item(db, COLLECTION, project_id, {"docs_last_commit": docs_commit})
+            print(f"[INFO] docs_last_commit set to {docs_commit[:8]} for project {project_id}")
+
         print(f"[INFO] Claude-based documentation generation completed for project {project_id}")
 
     except Exception as e:
@@ -261,7 +283,8 @@ async def _generate_documentation_with_claude_async(
 def generate_documentation_with_claude(
     project_id: str,
     repo_path: str,
-    db: PostgresDatabase
+    db: PostgresDatabase,
+    docs_commit: str | None = None,
 ):
     """
     Synchronous wrapper that runs the async documentation generation
@@ -272,7 +295,7 @@ def generate_documentation_with_claude(
     asyncio.set_event_loop(loop)
     try:
         loop.run_until_complete(
-            _generate_documentation_with_claude_async(project_id, repo_path, db)
+            _generate_documentation_with_claude_async(project_id, repo_path, db, docs_commit=docs_commit)
         )
     finally:
         loop.close()
@@ -416,6 +439,9 @@ def add_repo(
 
     repo_path = result  # Relative path like .repos/my-repo
 
+    # Capture current HEAD commit so we can persist it after docs are generated
+    head_commit = get_local_head_commit(repo_path)
+
     # Update project in database
     update_data = {
         "repo_path": repo_path,
@@ -428,7 +454,8 @@ def add_repo(
         generate_documentation_with_claude,
         project_id,
         repo_path,
-        db
+        db,
+        head_commit,
     )
 
     # Fetch updated project
