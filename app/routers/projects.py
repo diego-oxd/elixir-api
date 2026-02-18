@@ -1,4 +1,5 @@
 import asyncio
+import os
 import re
 import shutil
 import subprocess
@@ -32,7 +33,7 @@ from app.services.agent import query_codebase_json, query_codebase_markdown
 router = APIRouter(prefix="/projects", tags=["projects"])
 
 COLLECTION = "projects"
-REPOS_ROOT = Path(".repos")
+REPOS_ROOT = Path(os.environ.get("REPOS_ROOT_DIR", ".repos"))
 
 
 def _doc_to_response(doc: dict) -> dict:

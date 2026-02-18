@@ -1,4 +1,20 @@
 services:
+  api:
+    build: .
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    environment:
+      # Override DATABASE_URL to use the internal service name
+      DATABASE_URL: postgresql://app_user:app_password@postgres:5432/knowledge_extraction
+    volumes:
+      - repos_data:/app/.repos
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
   postgres:
     image: postgres:16
     environment:
@@ -15,6 +31,8 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+    restart: unless-stopped
 
 volumes:
   postgres_data:
+  repos_data:
