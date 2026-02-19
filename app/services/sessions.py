@@ -6,7 +6,9 @@ import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 
-from app.db import PostgresDatabase, get_item_by_id
+from psycopg2.extras import Json
+
+from app.db import PostgresDatabase, get_db, get_item_by_id
 from app.models.schemas import SessionInfo
 from app.models.session_types import SessionType
 
@@ -39,13 +41,35 @@ class APISession:
         )
 
 
+def _row_to_session(row: dict, repo_path: str) -> APISession:
+    """Convert a DB row to an APISession."""
+    created_at = row["created_at"]
+    last_accessed = row["last_accessed"]
+
+    # Ensure timezone-aware datetimes
+    if created_at.tzinfo is None:
+        created_at = created_at.replace(tzinfo=timezone.utc)
+    if last_accessed.tzinfo is None:
+        last_accessed = last_accessed.replace(tzinfo=timezone.utc)
+
+    return APISession(
+        session_id=str(row["id"]),
+        created_at=created_at,
+        last_accessed=last_accessed,
+        project_id=str(row["project_id"]),
+        repo_path=repo_path,
+        message_history=row.get("message_history") or [],
+        name=row.get("name"),
+        session_type=SessionType(row.get("session_type", "general")),
+    )
+
+
 class SessionManager:
-    """Manages active sessions with automatic cleanup."""
+    """Manages sessions persisted in PostgreSQL."""
 
     def __init__(
         self, default_timeout_minutes: int = 30, cleanup_interval_seconds: int = 60
     ):
-        self._sessions: dict[str, APISession] = {}
         self._timeout_minutes = default_timeout_minutes
         self._cleanup_interval = cleanup_interval_seconds
         self._cleanup_task: asyncio.Task | None = None
@@ -115,22 +139,23 @@ class SessionManager:
                 "Please add a codebase first."
             )
 
-        # Create session
+        # Create session in DB
         session_id = str(uuid.uuid4())
         now = datetime.now(timezone.utc)
+        effective_type = session_type or SessionType.GENERAL
 
-        session = APISession(
-            session_id=session_id,
-            created_at=now,
-            last_accessed=now,
-            project_id=project_id,
-            repo_path=repo_path,
-            message_history=[],
-            name=name,
-            session_type=session_type or SessionType.GENERAL,
-        )
+        with db.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO sessions (id, project_id, name, created_at, last_accessed, message_history, session_type)
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
+                RETURNING *
+                """,
+                (session_id, project_id, name, now, now, Json([]), effective_type.value),
+            )
+            row = cur.fetchone()
 
-        self._sessions[session_id] = session
+        session = _row_to_session(row, repo_path)
         logger.info(
             f"Created session {session_id} for project {project_id} "
             f"with type {session.session_type.value}"
@@ -138,74 +163,167 @@ class SessionManager:
 
         return session
 
-    async def get_session(self, session_id: str) -> APISession | None:
+    async def get_session(
+        self, session_id: str, db: PostgresDatabase
+    ) -> APISession | None:
         """Get a session by ID and update last_accessed.
 
         Args:
             session_id: The session ID to retrieve
+            db: Database instance
 
         Returns:
             The APISession if found, None otherwise
         """
-        session = self._sessions.get(session_id)
-        if session:
-            session.last_accessed = datetime.now(timezone.utc)
+        with db.cursor() as cur:
+            # Fetch session joined with project to get repo_path
+            cur.execute(
+                """
+                SELECT s.*, p.repo_path
+                FROM sessions s
+                JOIN projects p ON s.project_id = p.id
+                WHERE s.id = %s
+                """,
+                (session_id,),
+            )
+            row = cur.fetchone()
+
+            if row is None:
+                return None
+
+            # Update last_accessed
+            now = datetime.now(timezone.utc)
+            cur.execute(
+                "UPDATE sessions SET last_accessed = %s WHERE id = %s",
+                (now, session_id),
+            )
+
+        repo_path = row["repo_path"]
+        session = _row_to_session(row, repo_path)
+        session.last_accessed = now
         return session
 
     async def update_session(
-        self, session_id: str, name: str | None = None
+        self, session_id: str, db: PostgresDatabase, name: str | None = None
     ) -> APISession | None:
         """Update a session's properties.
 
         Args:
             session_id: The session ID to update
+            db: Database instance
             name: New name for the session (if provided)
 
         Returns:
             The updated APISession if found, None otherwise
         """
-        session = self._sessions.get(session_id)
-        if not session:
-            return None
+        with db.cursor() as cur:
+            # Check session exists and get repo_path
+            cur.execute(
+                """
+                SELECT s.*, p.repo_path
+                FROM sessions s
+                JOIN projects p ON s.project_id = p.id
+                WHERE s.id = %s
+                """,
+                (session_id,),
+            )
+            row = cur.fetchone()
 
+            if row is None:
+                return None
+
+            # Update fields
+            now = datetime.now(timezone.utc)
+            if name is not None:
+                cur.execute(
+                    "UPDATE sessions SET name = %s, last_accessed = %s WHERE id = %s",
+                    (name, now, session_id),
+                )
+            else:
+                cur.execute(
+                    "UPDATE sessions SET last_accessed = %s WHERE id = %s",
+                    (now, session_id),
+                )
+
+        repo_path = row["repo_path"]
+        session = _row_to_session(row, repo_path)
         if name is not None:
             session.name = name
-
-        session.last_accessed = datetime.now(timezone.utc)
+        session.last_accessed = now
         logger.info(f"Updated session {session_id}")
         return session
 
-    async def delete_session(self, session_id: str) -> bool:
+    async def delete_session(self, session_id: str, db: PostgresDatabase) -> bool:
         """Delete a session.
 
         Args:
             session_id: The session ID to delete
+            db: Database instance
 
         Returns:
             True if session was found and deleted, False otherwise
         """
-        if session_id in self._sessions:
-            del self._sessions[session_id]
+        with db.cursor() as cur:
+            cur.execute("DELETE FROM sessions WHERE id = %s", (session_id,))
+            deleted = cur.rowcount > 0
+
+        if deleted:
             logger.info(f"Deleted session {session_id}")
-            return True
-        return False
+        return deleted
 
     async def list_sessions(
-        self, project_id: str | None = None
+        self, db: PostgresDatabase, project_id: str | None = None
     ) -> list[SessionInfo]:
         """List all sessions, optionally filtered by project.
 
         Args:
+            db: Database instance
             project_id: Optional project ID to filter by
 
         Returns:
             List of SessionInfo objects
         """
-        sessions = self._sessions.values()
-        if project_id:
-            sessions = [s for s in sessions if s.project_id == project_id]
+        with db.cursor() as cur:
+            if project_id:
+                cur.execute(
+                    """
+                    SELECT s.*, p.repo_path
+                    FROM sessions s
+                    JOIN projects p ON s.project_id = p.id
+                    WHERE s.project_id = %s
+                    ORDER BY s.last_accessed DESC
+                    """,
+                    (project_id,),
+                )
+            else:
+                cur.execute(
+                    """
+                    SELECT s.*, p.repo_path
+                    FROM sessions s
+                    JOIN projects p ON s.project_id = p.id
+                    ORDER BY s.last_accessed DESC
+                    """
+                )
+            rows = cur.fetchall()
 
-        return [session.to_info() for session in sessions]
+        return [_row_to_session(row, row["repo_path"]).to_info() for row in rows]
+
+    async def save_message_history(
+        self, session_id: str, message_history: list[dict], db: PostgresDatabase
+    ) -> None:
+        """Save updated message history to the database.
+
+        Args:
+            session_id: The session ID to update
+            message_history: The full message history to save
+            db: Database instance
+        """
+        now = datetime.now(timezone.utc)
+        with db.cursor() as cur:
+            cur.execute(
+                "UPDATE sessions SET message_history = %s, last_accessed = %s WHERE id = %s",
+                (Json(message_history), now, session_id),
+            )
 
     async def cleanup_expired(self) -> int:
         """Remove sessions that haven't been accessed recently.
@@ -213,25 +331,17 @@ class SessionManager:
         Returns:
             Number of sessions removed
         """
-        now = datetime.now(timezone.utc)
-        timeout_delta = timedelta(minutes=self._timeout_minutes)
+        cutoff = datetime.now(timezone.utc) - timedelta(minutes=self._timeout_minutes)
 
-        expired_ids = [
-            session_id
-            for session_id, session in self._sessions.items()
-            if now - session.last_accessed > timeout_delta
-        ]
+        with get_db() as db:
+            with db.cursor() as cur:
+                cur.execute(
+                    "DELETE FROM sessions WHERE last_accessed < %s",
+                    (cutoff,),
+                )
+                count = cur.rowcount
 
-        for session_id in expired_ids:
-            del self._sessions[session_id]
-
-        return len(expired_ids)
-
-    async def close_all_sessions(self) -> None:
-        """Close all sessions. Called on shutdown."""
-        count = len(self._sessions)
-        self._sessions.clear()
-        logger.info(f"Closed {count} sessions")
+        return count
 
 
 # Helper functions for building prompts

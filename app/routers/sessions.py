@@ -76,18 +76,20 @@ async def create_session(
 @router.get("", response_model=ListSessionsResponse)
 async def list_sessions(
     session_manager: SessionManagerDep,
+    db: Annotated[PostgresDatabase, Depends(get_db_dependency)],
     project_id: Annotated[str | None, Query()] = None,
 ):
     """List all sessions, optionally filtered by project.
 
     Args:
         session_manager: The session manager dependency
+        db: Database instance
         project_id: Optional project ID to filter by
 
     Returns:
         ListSessionsResponse with sessions and count
     """
-    sessions = await session_manager.list_sessions(project_id)
+    sessions = await session_manager.list_sessions(db, project_id)
     return ListSessionsResponse(sessions=sessions, count=len(sessions))
 
 
@@ -109,6 +111,7 @@ async def get_session(session: SessionDep):
         message_count=len(session.message_history),
         message_history=session.message_history,
         name=session.name,
+        session_type=session.session_type.value,
     )
 
 
@@ -117,6 +120,7 @@ async def update_session(
     session_id: str,
     request: UpdateSessionRequest,
     session_manager: SessionManagerDep,
+    db: Annotated[PostgresDatabase, Depends(get_db_dependency)],
 ):
     """Update a session's properties.
 
@@ -124,6 +128,7 @@ async def update_session(
         session_id: The session ID to update
         request: The update request with fields to modify
         session_manager: The session manager dependency
+        db: Database instance
 
     Returns:
         UpdateSessionResponse with updated details
@@ -131,7 +136,7 @@ async def update_session(
     Raises:
         HTTPException: 404 if session not found
     """
-    session = await session_manager.update_session(session_id, name=request.name)
+    session = await session_manager.update_session(session_id, db, name=request.name)
     if not session:
         raise HTTPException(status_code=404, detail=f"Session {session_id} not found")
 
@@ -143,17 +148,22 @@ async def update_session(
 
 
 @router.delete("/{session_id}", response_model=DeleteSessionResponse)
-async def delete_session(session_id: str, session_manager: SessionManagerDep):
+async def delete_session(
+    session_id: str,
+    session_manager: SessionManagerDep,
+    db: Annotated[PostgresDatabase, Depends(get_db_dependency)],
+):
     """Delete a session.
 
     Args:
         session_id: The session ID to delete
         session_manager: The session manager dependency
+        db: Database instance
 
     Returns:
         DeleteSessionResponse with success status
     """
-    success = await session_manager.delete_session(session_id)
+    success = await session_manager.delete_session(session_id, db)
     if not success:
         raise HTTPException(status_code=404, detail=f"Session {session_id} not found")
 

@@ -124,7 +124,7 @@ TABLE_COLUMNS = {
     "pages": ["id", "project_id", "name", "title", "content", "markdown_content"],
     "code_samples": ["id", "project_id", "title", "language", "description", "code_string"],
     "doc_pages": ["id", "project_id", "title", "content"],
-    "sessions": ["id", "project_id", "name", "created_at", "last_accessed", "message_history"],
+    "sessions": ["id", "project_id", "name", "created_at", "last_accessed", "message_history", "session_type"],
 }
 
 
@@ -231,8 +231,10 @@ def add_item(db: PostgresDatabase, collection_name: str, item: dict) -> InsertRe
             continue
         if col in item:
             value = item[col]
-            # Special handling for pages.content (JSONB)
-            if collection_name == "pages" and col == "content":
+            # Special handling for JSONB columns
+            if (collection_name == "pages" and col == "content") or (
+                collection_name == "sessions" and col == "message_history"
+            ):
                 insert_data[col] = Json(value)
             else:
                 insert_data[col] = value
@@ -345,8 +347,10 @@ def update_item(
     set_parts = []
     params = []
     for key, value in updates.items():
-        # Special handling for pages.content (JSONB)
-        if collection_name == "pages" and key == "content":
+        # Special handling for JSONB columns
+        if (collection_name == "pages" and key == "content") or (
+            collection_name == "sessions" and key == "message_history"
+        ):
             set_parts.append(f"{key} = %s")
             params.append(Json(value))
         else:

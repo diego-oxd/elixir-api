@@ -4,6 +4,7 @@ from typing import Annotated
 
 from fastapi import Depends, HTTPException, Path
 
+from app.db import PostgresDatabase, get_db_dependency
 from app.services.sessions import APISession, SessionManager
 
 _session_manager: SessionManager | None = None
@@ -36,12 +37,14 @@ def get_session_manager() -> SessionManager:
 async def get_session(
     session_id: Annotated[str, Path()],
     session_manager: Annotated[SessionManager, Depends(get_session_manager)],
+    db: Annotated[PostgresDatabase, Depends(get_db_dependency)],
 ) -> APISession:
     """Get a session by ID or raise 404.
 
     Args:
         session_id: The session ID from the path
         session_manager: The session manager dependency
+        db: Database instance
 
     Returns:
         The APISession
@@ -49,7 +52,7 @@ async def get_session(
     Raises:
         HTTPException: 404 if session not found
     """
-    session = await session_manager.get_session(session_id)
+    session = await session_manager.get_session(session_id, db)
     if session is None:
         raise HTTPException(
             status_code=404, detail=f"Session {session_id} not found"

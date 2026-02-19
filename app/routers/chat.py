@@ -1,11 +1,13 @@
 """Chat API endpoint for sending messages to Claude SDK sessions."""
 
 import logging
+from typing import Annotated
 
 from claude_agent_sdk import AssistantMessage, ClaudeAgentOptions, TextBlock, query
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 
-from app.dependencies import SessionDep
+from app.db import PostgresDatabase, get_db_dependency
+from app.dependencies import SessionDep, SessionManagerDep
 from app.models.schemas import ChatRequest, ChatResponse
 from app.models.session_types import SessionType
 from app.services.prompt_templates import get_template_for_type
@@ -16,7 +18,12 @@ router = APIRouter()
 
 
 @router.post("/{session_id}/chat", response_model=ChatResponse)
-async def chat(session: SessionDep, request: ChatRequest):
+async def chat(
+    session: SessionDep,
+    request: ChatRequest,
+    session_manager: SessionManagerDep,
+    db: Annotated[PostgresDatabase, Depends(get_db_dependency)],
+):
     """Send a message to a session and get Claude's response.
 
     This endpoint maintains conversation history across multiple requests.
@@ -29,6 +36,8 @@ async def chat(session: SessionDep, request: ChatRequest):
     Args:
         session: The session from dependency injection
         request: The chat request with user message
+        session_manager: The session manager dependency
+        db: Database instance
 
     Returns:
         ChatResponse with Claude's response and metadata
@@ -64,10 +73,13 @@ async def chat(session: SessionDep, request: ChatRequest):
                     if isinstance(block, TextBlock):
                         response_text = block.text
 
-        # Update conversation history
+        # Update conversation history and persist to DB
         session.message_history.append({"role": "user", "content": request.message})
         session.message_history.append(
             {"role": "assistant", "content": response_text}
+        )
+        await session_manager.save_message_history(
+            session.session_id, session.message_history, db
         )
 
         logger.info(

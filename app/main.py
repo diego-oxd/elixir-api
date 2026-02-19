@@ -81,9 +81,8 @@ async def lifespan(app: FastAPI):
 
     yield
 
-    # Shutdown - cleanup sessions and close pool
+    # Shutdown - stop cleanup task and close pool
     await session_manager.stop_cleanup_task()
-    await session_manager.close_all_sessions()
     logger.info("Session manager shutdown complete")
 
     close_pool()
