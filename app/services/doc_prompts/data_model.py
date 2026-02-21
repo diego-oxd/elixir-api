@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import List, Optional, Literal
+from typing import List, Optional
 
 
 class Field(BaseModel):
@@ -127,45 +127,6 @@ Extract:
           "description": "Each user has one active shopping cart"
         }
       ]
-    },
-    {
-      "name": "Products",
-      "type": "collection",
-      "purpose": "Stores product catalog information",
-      "fields": [
-        {
-          "name": "_id",
-          "data_type": "string",
-          "required": true
-        },
-        {
-          "name": "name",
-          "data_type": "string",
-          "required": true
-        },
-        {
-          "name": "price",
-          "data_type": "number",
-          "required": true
-        },
-        {
-          "name": "stock",
-          "data_type": "number",
-          "required": true
-        },
-        {
-          "name": "category",
-          "data_type": "string",
-          "required": false
-        }
-      ],
-      "relationships": [
-        {
-          "related_to": "Orders",
-          "relationship_type": "many-to-many",
-          "description": "Products can appear in multiple orders"
-        }
-      ]
     }
   ]
 }
@@ -179,6 +140,7 @@ Before submitting, verify:
 - [ ] Relationships between collections are clear
 - [ ] Descriptions are concise and helpful
 """
+
 
 data_model_prompt = {
     "name": "data_model",

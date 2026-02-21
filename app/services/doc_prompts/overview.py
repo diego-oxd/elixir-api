@@ -1,4 +1,4 @@
-overview_prompt_template = """
+prompt_template = """
 # Codebase Onboarding & Familiarization Prompt
 
 ## Primary Objective
@@ -8,7 +8,7 @@ Provide a comprehensive but concise overview of this codebase to enable a new de
 Analyze the codebase and provide a structured onboarding guide that covers:
 
 1. **Project Identity & Purpose**
-   - What does this application do? 
+   - What does this application do?
 
 2. **Technology Stack**
    - Framework(s) and versions
@@ -47,8 +47,8 @@ Provide output as a Markdown document with the following structure:
 ## Quick Summary
 [2-3 sentences describing what this application does and its core purpose]
 
-**Tech Stack:** [Framework] + [Database] + [Key Libraries]  
-**Architecture:** [Pattern Type]  
+**Tech Stack:** [Framework] + [Database] + [Key Libraries]
+**Architecture:** [Pattern Type]
 **Last Updated:** [If version info available]
 ---
 
@@ -141,7 +141,7 @@ project-root/
 - [How authorization is handled]
 
 ## Follow up questions
-- What are things that I should 
+- What are things that I should
 ---
 ```
 
@@ -190,8 +190,8 @@ The markdown should be ready for immediate display in a markdown renderer withou
 
 
 project_overview_prompt = {
-   "name": "project_overview",
-   "description": "Provides a comprehensive overview of the entire codebase, including architecture, data flow, key components, and technology stack.",
-   "prompt_template": overview_prompt_template,
-   "schema": None,  # Returns raw markdown, not structured JSON
+    "name": "project_overview",
+    "description": "Provides a comprehensive overview of the entire codebase, including architecture, data flow, key components, and technology stack.",
+    "prompt_template": prompt_template,
+    "schema": None,  # Returns raw markdown, not structured JSON
 }

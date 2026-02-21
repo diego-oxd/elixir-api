@@ -27,7 +27,7 @@ from app.models.schemas import (
     ProjectResponse,
     ProjectUpdate,
 )
-from app.services.prompts import prompts
+from app.services.doc_prompts import registry as prompts
 from app.services.agent import query_codebase_json, query_codebase_markdown
 
 router = APIRouter(prefix="/projects", tags=["projects"])

@@ -1,4 +1,4 @@
-new_feature_prompt_template = """
+_template = """
 
 # Feature Implementation Guide
 
@@ -151,6 +151,11 @@ Identify potential issues, edge cases, and affected areas.
 - Prioritize information by implementation order
 - Flag blockers or dependencies clearly
 
-If any items in the output format or the analysis guideline 
+If any items in the output format or the analysis guideline
 is not applicable to this feature, you can just ignore them.
 """
+
+
+def new_feature_template(user_message: str) -> str:
+    """New feature session template — injects requirements into template."""
+    return _template.format(requirements=user_message)

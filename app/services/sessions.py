@@ -2,6 +2,7 @@
 
 import asyncio
 import logging
+import os
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
@@ -68,7 +69,7 @@ class SessionManager:
     """Manages sessions persisted in PostgreSQL."""
 
     def __init__(
-        self, default_timeout_minutes: int = 30, cleanup_interval_seconds: int = 60
+        self, default_timeout_minutes: int = int(os.getenv("SESSION_TIMEOUT_MINUTES", 10080)), cleanup_interval_seconds: int = 60
     ):
         self._timeout_minutes = default_timeout_minutes
         self._cleanup_interval = cleanup_interval_seconds

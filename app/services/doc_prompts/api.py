@@ -1,9 +1,11 @@
 from pydantic import BaseModel, Field
 from typing import List, Optional, Literal
 
+
 class AuthInfo(BaseModel):
     required: bool
     scheme: Optional[str] = Field(description="e.g., JWT, Session, API Key, or None")
+
 
 class InputParameter(BaseModel):
     name: str
@@ -12,10 +14,12 @@ class InputParameter(BaseModel):
     required: bool
     description: Optional[str] = None
 
+
 class OutputField(BaseModel):
     name: str
     data_type: str = Field(description="The primitive or object type returned")
     description: Optional[str] = None
+
 
 class APIEndpoint(BaseModel):
     identifier: str = Field(description="The route path or method name")
@@ -26,13 +30,14 @@ class APIEndpoint(BaseModel):
     inputs: List[InputParameter] = Field(description="All required and optional inputs")
     outputs: List[OutputField] = Field(description="Fields included in a successful response")
 
+
 class APIDocumentation(BaseModel):
     framework: str
     base_url: Optional[str] = None
     endpoints: List[APIEndpoint]
 
 
-prompt = """
+prompt_template = """
 # Task: API Surface Area Extraction
 
 ## Objective
@@ -74,6 +79,6 @@ Return a structured JSON object according to the `APIDocumentation` schema. Ensu
 api_prompt = {
     "name": "api",
     "description": "Analyzes API endpoints and provides detailed information about their structure and functionality.",
-    "prompt_template": prompt,
+    "prompt_template": prompt_template,
     "schema": APIDocumentation,
 }

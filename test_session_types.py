@@ -1,7 +1,7 @@
 """Quick test to verify session types implementation."""
 
 from app.models.session_types import SessionType
-from app.services.prompt_templates import get_template_for_type
+from app.services.session_templates import get_template_for_type
 
 
 def test_general_template():

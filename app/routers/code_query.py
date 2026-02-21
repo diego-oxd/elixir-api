@@ -9,7 +9,7 @@ from app.models.schemas import (
     SimpleCodebaseSummary,
 )
 from app.services.agent import query_codebase, query_codebase_json, query_codebase_markdown
-from app.services.prompts import prompts
+from app.services.doc_prompts import registry as prompts
 
 router = APIRouter(prefix="/code-query", tags=["code-query"])
 

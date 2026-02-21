@@ -10,7 +10,7 @@ from app.db import PostgresDatabase, get_db_dependency
 from app.dependencies import SessionDep, SessionManagerDep
 from app.models.schemas import ChatRequest, ChatResponse
 from app.models.session_types import SessionType
-from app.services.prompt_templates import get_template_for_type
+from app.services.session_templates import get_template_for_type
 from app.services.sessions import build_chat_prompt
 
 logger = logging.getLogger(__name__)
