@@ -42,3 +42,4 @@ scripts/outputs/*
 
 # Cloned repositories
 .repos/
+.claude/skills/
