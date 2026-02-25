@@ -9,7 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.db import close_pool, get_pool
 from app.dependencies import set_session_manager
-from app.routers import chat, code_query, code_samples, doc_pages, pages, projects, sessions
+from app.routers import chat, code_query, code_samples, doc_pages, metrics, pages, projects, sessions
 from app.services.sessions import SessionManager
 
 # Load environment variables from .env file (no-op in Docker where env is injected)
@@ -114,6 +114,7 @@ app.include_router(pages.router)
 app.include_router(code_samples.router)
 app.include_router(doc_pages.router)
 app.include_router(code_query.router)
+app.include_router(metrics.router)
 app.include_router(sessions.router, prefix="/sessions", tags=["sessions"])
 app.include_router(chat.router, prefix="/sessions", tags=["chat"])
 
