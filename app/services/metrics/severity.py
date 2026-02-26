@@ -73,6 +73,8 @@ DEAD_FUNCTIONS_PCT_THRESHOLDS = {
     "acceptable": 20.0,
     "warning": 30.0,
 }
+# Count-based threshold for JS/TS dead exports (knip doesn't give us total function count)
+DEAD_EXPORTS_JS_THRESHOLDS = {"excellent": 0, "good": 5, "acceptable": 15, "warning": 30}
 ORPHANED_MODULES_THRESHOLDS = {
     "excellent": 0,
     "good": 2,

@@ -40,6 +40,6 @@ def delete_pages_by_project(project_id: str):
 
 if __name__ == "__main__":
     # check_projects()
-    # project_id = "a4042b78-d583-41c7-b843-3460c5b5f2a3"
+    project_id = "a4042b78-d583-41c7-b843-3460c5b5f2a3"
     # delete_pages_by_project(project_id)
-    check_pages()
+    # check_pages()
