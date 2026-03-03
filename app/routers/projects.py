@@ -29,6 +29,7 @@ from app.models.schemas import (
 )
 from app.services.doc_prompts import registry as prompts
 from app.services.agent import query_codebase_json, query_codebase_markdown
+from app.services.metrics import generate_metrics
 
 router = APIRouter(prefix="/projects", tags=["projects"])
 
@@ -270,6 +271,14 @@ async def _generate_documentation_with_claude_async(
                 # Log error but continue with other prompts
                 print(f"[ERROR] Failed to generate '{prompt_name}' for project {project_id}: {e}")
                 continue
+
+        # 3. Generate metrics (static analysis, no Claude calls)
+        try:
+            print(f"[INFO] Generating metrics for project {project_id}")
+            generate_metrics(project_id, repo_path, db)
+            print(f"[INFO] Metrics generation completed for project {project_id}")
+        except Exception as e:
+            print(f"[ERROR] Metrics generation failed for project {project_id}: {e}")
 
         if docs_commit:
             update_item(db, COLLECTION, project_id, {"docs_last_commit": docs_commit})
