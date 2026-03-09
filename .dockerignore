@@ -1,0 +1,53 @@
+# Python virtual environment
+.venv/
+
+# Cloned repositories (mounted at runtime via ECS bind mount or EFS)
+.repos/
+
+# Logs (ephemeral, not needed in image)
+logs/
+
+# Environment variables (secrets — never bake into image)
+.env
+
+# yoyo local config (contains local DB credentials, for CLI use only)
+yoyo.ini
+
+# Script outputs
+scripts/outputs/
+
+# uv cache
+.uv/
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Build artifacts
+*.egg-info/
+dist/
+build/
+
+# Docs and tickets (not needed in image)
+docs/
+tickets/
+
+# Claude settings
+.claude/

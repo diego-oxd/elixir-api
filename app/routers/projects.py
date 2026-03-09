@@ -1,4 +1,5 @@
 import asyncio
+import logging
 import os
 import re
 import shutil
@@ -30,6 +31,8 @@ from app.models.schemas import (
 from app.services.doc_prompts import registry as prompts
 from app.services.agent import query_codebase_json, query_codebase_markdown
 from app.services.metrics import generate_metrics
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/projects", tags=["projects"])
 
@@ -86,12 +89,12 @@ def clone_repository(repo_url: str, repo_name: str) -> tuple[bool, str]:
 
     # Delete existing clone if present
     if clone_path.exists():
-        print(f"[INFO] Removing existing clone at {clone_path}")
+        logger.info(f"Removing existing clone at {clone_path}")
         shutil.rmtree(clone_path)
 
     # Clone repository
     try:
-        print(f"[INFO] Cloning {repo_url} to {clone_path}")
+        logger.info(f"Cloning {repo_url} to {clone_path}")
         result = subprocess.run(
             ["git", "clone", repo_url, str(clone_path)],
             capture_output=True,
@@ -124,58 +127,6 @@ PAGE_TITLES = {
 }
 
 
-def generate_documentation_background(project_id: str, repo_path: str, db: PostgresDatabase):
-    """
-    Background task that calls GraphRag service and saves generated pages.
-    """
-    print(f"[INFO] Starting documentation generation for project {project_id}, repo: {repo_path}")
-
-    try:
-        # 1. Call GraphRag service
-        response = requests.post(
-            "http://localhost:8001/scripts/generate_documentation",
-            json={"repo_path": repo_path},
-            timeout=1200  # 20 minutes
-        )
-        response.raise_for_status()
-        data = response.json()
-
-        print(f"[INFO] GraphRag returned successfully for project {project_id}")
-
-        # 2. Delete existing pages for this project (replacement strategy)
-        page_names = list(PAGE_TITLES.keys())
-        deleted_count = delete_items_by_filter(
-            db,
-            "pages",
-            {
-                "project_id": project_id,
-                "name": {"$in": page_names}
-            }
-        )
-        print(f"[INFO] Deleted {deleted_count} existing pages for project {project_id}")
-
-        # 3. Save new pages
-        for name, content in data.items():
-            if name in PAGE_TITLES:
-                page_doc = {
-                    "project_id": project_id,
-                    "name": name,
-                    "title": PAGE_TITLES[name],
-                    "content": content,
-                }
-                add_item(db, "pages", page_doc)
-                print(f"[INFO] Saved page '{name}' for project {project_id}")
-
-        print(f"[INFO] Documentation generation completed for project {project_id}")
-
-    except requests.exceptions.Timeout:
-        print(f"[ERROR] Documentation generation timed out for project {project_id} (20 min limit)")
-    except requests.exceptions.RequestException as e:
-        print(f"[ERROR] GraphRag request failed for project {project_id}: {e}")
-    except Exception as e:
-        print(f"[ERROR] Documentation generation failed for project {project_id}: {e}")
-
-
 def get_local_head_commit(repo_path: str) -> str | None:
     """Return the current HEAD commit hash for the given local repo."""
     try:
@@ -203,7 +154,7 @@ async def _generate_documentation_with_claude_async(
     Async helper that uses Claude Agent SDK to generate documentation
     for all configured prompts and saves pages to the database.
     """
-    print(f"[INFO] Starting Claude-based documentation generation for project {project_id}, repo: {repo_path}")
+    logger.info(f"Starting documentation generation for project {project_id}, repo: {repo_path}")
 
     try:
         # 1. Delete existing pages for this project (replacement strategy)
@@ -216,12 +167,12 @@ async def _generate_documentation_with_claude_async(
                 "name": {"$in": page_names}
             }
         )
-        print(f"[INFO] Deleted {deleted_count} existing pages for project {project_id}")
+        logger.info(f"Deleted {deleted_count} existing pages for project {project_id}")
 
         # 2. Generate documentation for each prompt
         for prompt_name, prompt_data in prompts.items():
             try:
-                print(f"[INFO] Generating '{prompt_name}' documentation for project {project_id}")
+                logger.info(f"Generating '{prompt_name}' documentation for project {project_id}")
 
                 # Get title from PAGE_TITLES or fallback to prompt name
                 title = PAGE_TITLES.get(prompt_name, prompt_name.replace("_", " ").title())
@@ -229,7 +180,7 @@ async def _generate_documentation_with_claude_async(
                 # Check if this is a markdown prompt or structured prompt
                 if prompt_data["schema"] is None:
                     # Markdown prompt (overview, frontend)
-                    print(f"[INFO] Using markdown output for '{prompt_name}'")
+                    logger.info(f"Using markdown output for '{prompt_name}'")
                     markdown_result = await query_codebase_markdown(
                         user_query=prompt_data["prompt_template"],
                         repo_path=repo_path,
@@ -245,7 +196,7 @@ async def _generate_documentation_with_claude_async(
                     }
                 else:
                     # Structured prompt (api, data_model)
-                    print(f"[INFO] Using structured output for '{prompt_name}'")
+                    logger.info(f"Using structured output for '{prompt_name}'")
                     result = await query_codebase_json(
                         user_query=prompt_data["prompt_template"],
                         repo_path=repo_path,
@@ -265,29 +216,29 @@ async def _generate_documentation_with_claude_async(
                     }
 
                 add_item(db, "pages", page_doc)
-                print(f"[INFO] Saved page '{prompt_name}' for project {project_id}")
+                logger.info(f"Saved page '{prompt_name}' for project {project_id}")
 
             except Exception as e:
                 # Log error but continue with other prompts
-                print(f"[ERROR] Failed to generate '{prompt_name}' for project {project_id}: {e}")
+                logger.error(f"Failed to generate '{prompt_name}' for project {project_id}: {e}")
                 continue
 
         # 3. Generate metrics (static analysis, no Claude calls)
         try:
-            print(f"[INFO] Generating metrics for project {project_id}")
+            logger.info(f"Generating metrics for project {project_id}")
             generate_metrics(project_id, repo_path, db)
-            print(f"[INFO] Metrics generation completed for project {project_id}")
+            logger.info(f"Metrics generation completed for project {project_id}")
         except Exception as e:
-            print(f"[ERROR] Metrics generation failed for project {project_id}: {e}")
+            logger.error(f"Metrics generation failed for project {project_id}: {e}")
 
         if docs_commit:
             update_item(db, COLLECTION, project_id, {"docs_last_commit": docs_commit})
-            print(f"[INFO] docs_last_commit set to {docs_commit[:8]} for project {project_id}")
+            logger.info(f"docs_last_commit set to {docs_commit[:8]} for project {project_id}")
 
-        print(f"[INFO] Claude-based documentation generation completed for project {project_id}")
+        logger.info(f"Documentation generation completed for project {project_id}")
 
     except Exception as e:
-        print(f"[ERROR] Documentation generation failed for project {project_id}: {e}")
+        logger.error(f"Documentation generation failed for project {project_id}: {e}")
 
 
 def generate_documentation_with_claude(
@@ -405,7 +356,7 @@ def add_codebase(
 
     # Spawn background task for documentation generation
     background_tasks.add_task(
-        generate_documentation_background,
+        generate_documentation_with_claude,
         project_id,
         request.repo_path,
         db
@@ -471,6 +422,6 @@ def add_repo(
     # Fetch updated project
     updated_project = get_item_by_id(db, COLLECTION, project_id)
 
-    print(f"[INFO] Successfully added repo {repo_name} to project {project_id}")
+    logger.info(f"Successfully added repo {repo_name} to project {project_id}")
 
     return _doc_to_response(updated_project)
